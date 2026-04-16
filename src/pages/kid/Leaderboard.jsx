@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
+import { format, startOfWeek, endOfWeek, subWeeks } from 'date-fns'
 import { getLevel, LEVELS } from '../../lib/levels'
-import { Zap } from 'lucide-react'
+import { Zap, Trophy } from 'lucide-react'
 
 const DUO_LEVEL = {
   [LEVELS.ORIENTATION]: { fill:'#94A3B8', bg:'#F1F5F9', text:'#64748B', emoji:'🌱' },
@@ -18,18 +18,12 @@ const MEDAL_COLORS = [
   { bg:'#CD7F32', border:'#996633', text:'#552200' }, // bronze
 ]
 
-const TABS = [
-  { key:'week',  label:'This Week' },
-  { key:'month', label:'Month' },
-  { key:'all',   label:'All Time' },
-]
-
 export default function Leaderboard() {
   const { profile } = useAuth()
-  const [tab, setTab]       = useState('week')
-  const [ranked, setRanked] = useState([])
-  const [kids, setKids]     = useState({})
-  const [loading, setLoading] = useState(true)
+  const [ranked, setRanked]       = useState([])
+  const [lastWeekRanked, setLastWeekRanked] = useState([])
+  const [kids, setKids]           = useState({})
+  const [loading, setLoading]     = useState(true)
 
   useEffect(() => {
     supabase.from('kids').select('id, initials').eq('is_active', true)
@@ -43,49 +37,57 @@ export default function Leaderboard() {
   useEffect(() => {
     if (!Object.keys(kids).length) return
     setLoading(true)
-    const now = new Date()
-    let q = supabase.from('daily_logs').select('kid_id, total_pts')
-    if (tab === 'week') {
-      q = q.gte('date', format(startOfWeek(now,{weekStartsOn:1}),'yyyy-MM-dd'))
-           .lte('date', format(endOfWeek(now,{weekStartsOn:1}),'yyyy-MM-dd'))
-    } else if (tab === 'month') {
-      q = q.gte('date', format(startOfMonth(now),'yyyy-MM-dd'))
-           .lte('date', format(endOfMonth(now),'yyyy-MM-dd'))
-    }
-    q.then(({ data }) => {
+    const now   = new Date()
+    const wStart = format(startOfWeek(now,{weekStartsOn:1}),'yyyy-MM-dd')
+    const wEnd   = format(endOfWeek(now,{weekStartsOn:1}),'yyyy-MM-dd')
+    const lwStart = format(startOfWeek(subWeeks(now,1),{weekStartsOn:1}),'yyyy-MM-dd')
+    const lwEnd   = format(endOfWeek(subWeeks(now,1),{weekStartsOn:1}),'yyyy-MM-dd')
+
+    function toRanked(logs) {
       const totals = {}
-      data?.forEach(l => { totals[l.kid_id] = (totals[l.kid_id]||0) + l.total_pts })
-      const r = Object.entries(totals)
+      logs?.forEach(l => { totals[l.kid_id] = (totals[l.kid_id]||0) + l.total_pts })
+      return Object.entries(totals)
         .map(([id,total]) => ({ kid: kids[id], total }))
         .filter(e => e.kid)
         .sort((a,b) => b.total - a.total)
-      setRanked(r)
+    }
+
+    Promise.all([
+      supabase.from('daily_logs').select('kid_id, total_pts').gte('date',wStart).lte('date',wEnd),
+      supabase.from('daily_logs').select('kid_id, total_pts').gte('date',lwStart).lte('date',lwEnd),
+    ]).then(([{ data: thisWeek }, { data: lastWeek }]) => {
+      setRanked(toRanked(thisWeek))
+      setLastWeekRanked(toRanked(lastWeek))
       setLoading(false)
     })
-  }, [tab, kids])
+  }, [kids])
 
   const myIdx   = ranked.findIndex(r => r.kid?.id === profile?.id)
   const myEntry = myIdx >= 0 ? ranked[myIdx] : null
+  const lastWeekWinner = lastWeekRanked[0] || null
 
   return (
     <div className="space-y-4">
       <h1 style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:24, color:'var(--duo-text)' }}>Leaderboard</h1>
 
-      {/* Tabs */}
-      <div className="duo-card flex p-1 gap-1">
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className="flex-1 py-2.5 rounded-xl duo-btn transition-all"
-            style={{
-              background: tab === t.key ? '#1CB0F6' : 'transparent',
-              color: tab === t.key ? '#fff' : 'var(--duo-text-lt)',
-              fontFamily:'var(--font-display)', fontWeight:800, fontSize:12,
-              borderBottomColor: tab === t.key ? '#0A88CC' : 'transparent',
-              borderBottomWidth: tab === t.key ? '3px' : '0px',
-            }}>
-            {t.label}
-          </button>
-        ))}
+      {/* Last week winner banner */}
+      {lastWeekWinner && (
+        <div className="duo-card p-4 flex items-center gap-3"
+          style={{ borderColor:'#FFD70066', background:'#FFFBEB' }}>
+          <Trophy size={22} color="#FF9600" />
+          <div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:700, color:'#CC7700', fontSize:12, textTransform:'uppercase' }}>
+              Last Week's Winner
+            </div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:900, color:'#FF6B00', fontSize:18 }}>
+              🥇 {lastWeekWinner.kid.initials} — {lastWeekWinner.total} pts
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:13, color:'var(--duo-text-lt)', textTransform:'uppercase', letterSpacing:'0.06em' }}>
+        This Week's Rankings
       </div>
 
       {/* My rank card */}

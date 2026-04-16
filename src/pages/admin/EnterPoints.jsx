@@ -233,6 +233,18 @@ export default function EnterPoints() {
                 {majors > 0 && <div className="text-xs text-red-500 mt-1 font-semibold">−{majors * MAJOR_DEDUCTION} pts total</div>}
               </div>
             </div>
+            {(minors > 0 || majors > 0) && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Reason for infraction (optional)</label>
+                <textarea
+                  rows={2}
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="Briefly describe what happened…"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 resize-none focus:outline-none focus:ring-2 focus:ring-red-300"
+                />
+              </div>
+            )}
             <p className="text-xs text-slate-400">Changes only take effect when you hit Save Points below.</p>
           </div>
 

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { getLevel, LEVEL_CONFIG } from '../../lib/levels'
 import { isPrivilegeFrozen } from '../../lib/points'
 import LevelBadge from '../../components/ui/LevelBadge'
 import { format } from 'date-fns'
-import { ShieldAlert, Users, TrendingUp, DollarSign } from 'lucide-react'
+import { ShieldAlert, Users, TrendingUp, ChevronRight } from 'lucide-react'
 
 export default function AdminDashboard() {
+  const navigate = useNavigate()
   const [kids, setKids]     = useState([])
   const [logs, setLogs]     = useState({})
   const [loading, setLoading] = useState(true)
@@ -95,9 +97,10 @@ export default function AdminDashboard() {
               const frozen = isPrivilegeFrozen(log?.privilege_freeze_until)
 
               return (
-                <div
+                <button
                   key={kid.id}
-                  className={`bg-white rounded-2xl p-4 shadow-sm border ${frozen ? 'border-red-200' : 'border-slate-100'} flex items-center justify-between`}
+                  onClick={() => navigate(`/admin/kid/${kid.id}`)}
+                  className={`w-full bg-white rounded-2xl p-4 shadow-sm border text-left transition-all hover:shadow-md hover:-translate-y-0.5 ${frozen ? 'border-red-200' : 'border-slate-100'} flex items-center justify-between cursor-pointer`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-bold ${cfg ? cfg.badgeBg : 'bg-slate-100'}`}>
@@ -112,14 +115,17 @@ export default function AdminDashboard() {
                       {frozen && <div className="text-xs text-red-500 font-medium mt-0.5">⛔ Privileges frozen</div>}
                     </div>
                   </div>
-                  <div className="text-right">
-                    {total !== null
-                      ? <div className={`text-2xl font-bold ${cfg?.textClass || 'text-slate-800'}`}>{total}</div>
-                      : <div className="text-slate-300 text-2xl font-bold">—</div>
-                    }
-                    <div className="text-xs text-slate-400">pts today</div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-right">
+                      {total !== null
+                        ? <div className={`text-2xl font-bold ${cfg?.textClass || 'text-slate-800'}`}>{total}</div>
+                        : <div className="text-slate-300 text-2xl font-bold">—</div>
+                      }
+                      <div className="text-xs text-slate-400">pts today</div>
+                    </div>
+                    <ChevronRight size={16} className="text-slate-300" />
                   </div>
-                </div>
+                </button>
               )
             })}
           </div>
