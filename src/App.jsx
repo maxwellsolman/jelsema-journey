@@ -1,7 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 
-import Login       from './pages/auth/Login'
+import Login         from './pages/auth/Login'
+import ResetPassword from './pages/auth/ResetPassword'
 import AdminLayout from './components/layout/AdminLayout'
 import KidLayout   from './components/layout/KidLayout'
 
@@ -49,6 +50,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<RootRedirect />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* Admin routes */}
       <Route path="/admin" element={<RequireAuth role="admin"><AdminLayout /></RequireAuth>}>
