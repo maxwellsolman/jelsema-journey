@@ -64,13 +64,28 @@ export default function ManageKids() {
     const email    = toKidEmail(initials)
     const password = birthdayToPassword(birthday)
 
+    // Save admin session BEFORE signUp — signUp auto-signs in the new user
+    const { data: { session: adminSession } } = await supabase.auth.getSession()
+
     const { data: newUser, error: signUpErr } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { role: 'kid' } },
     })
 
-    if (signUpErr) { setError(signUpErr.message); setSaving(false); return }
+    if (signUpErr) {
+      setError(signUpErr.message)
+      setSaving(false)
+      return
+    }
+
+    // Immediately restore admin session so the kids INSERT passes RLS
+    if (adminSession) {
+      await supabase.auth.setSession({
+        access_token:  adminSession.access_token,
+        refresh_token: adminSession.refresh_token,
+      })
+    }
 
     // Confirm user immediately (no email verification for kids)
     // This is handled by the SQL we already ran: email_confirmed_at
