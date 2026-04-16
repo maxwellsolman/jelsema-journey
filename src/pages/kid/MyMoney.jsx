@@ -5,9 +5,9 @@ import { format, subDays, startOfWeek, endOfWeek } from 'date-fns'
 import { getLevel, LEVELS } from '../../lib/levels'
 
 const TASKS = [
-  { key: 'reading_log', label: 'Reading Log',   emoji: '📚' },
-  { key: 'planner',     label: 'Journal',        emoji: '📓' },
-  { key: 'mindfulness', label: 'Mindfulness',    emoji: '🧘' },
+  { key: 'reading_log', label: 'Reading Log',  emoji: '📚', color:'#1CB0F6', bg:'#F0F9FF' },
+  { key: 'planner',     label: 'Journal',       emoji: '📓', color:'#9333EA', bg:'#FAF5FF' },
+  { key: 'mindfulness', label: 'Mindfulness',   emoji: '🧘', color:'#22C55E', bg:'#F0FDF4' },
 ]
 
 export default function MyMoney() {
@@ -15,10 +15,9 @@ export default function MyMoney() {
   const [earnings, setEarnings]       = useState([])
   const [redemptions, setRedemptions] = useState([])
   const [weekEarned, setWeekEarned]   = useState(0)
-  const [totalEarned, setTotalEarned] = useState(0)
   const [todayLevel, setTodayLevel]   = useState(null)
   const [loading, setLoading]         = useState(true)
-  const today = format(new Date(), 'yyyy-MM-dd')
+  const today    = format(new Date(), 'yyyy-MM-dd')
   const isSunday = new Date().getDay() === 0
 
   useEffect(() => {
@@ -29,18 +28,17 @@ export default function MyMoney() {
         .eq('kid_id', profile.id).gte('date', since).order('date', { ascending: false })
       setEarnings(earnsData || [])
 
-      const wStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-      const wEnd   = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-      const wEarns = (earnsData || []).filter(e => e.date >= wStart && e.date <= wEnd)
-      setWeekEarned(wEarns.reduce((s, e) => s + (e.total_earned || 0), 0))
-      setTotalEarned((earnsData || []).reduce((s, e) => s + (e.total_earned || 0), 0))
+      const wStart = format(startOfWeek(new Date(),{weekStartsOn:1}),'yyyy-MM-dd')
+      const wEnd   = format(endOfWeek(new Date(),{weekStartsOn:1}),'yyyy-MM-dd')
+      const wEarns = (earnsData||[]).filter(e => e.date >= wStart && e.date <= wEnd)
+      setWeekEarned(wEarns.reduce((s,e) => s + (e.total_earned||0), 0))
 
       const { data: log } = await supabase.from('daily_logs').select('total_pts')
         .eq('kid_id', profile.id).eq('date', today).single()
       setTodayLevel(log ? getLevel(log.total_pts) : null)
 
       const { data: redeemData } = await supabase.from('canteen_redemptions')
-        .select('*').eq('kid_id', profile.id).order('redeemed_at', { ascending: false }).limit(10)
+        .select('*').eq('kid_id', profile.id).order('redeemed_at',{ascending:false}).limit(10)
       setRedemptions(redeemData || [])
 
       setLoading(false)
@@ -48,60 +46,102 @@ export default function MyMoney() {
     load()
   }, [profile?.id])
 
-  const isRoleModel = todayLevel === LEVELS.ROLEMODEL
+  const isRoleModel   = todayLevel === LEVELS.ROLEMODEL
+  const canteenOpen   = isRoleModel && isSunday
+  const totalEarned   = earnings.reduce((s,e) => s + (e.total_earned||0), 0)
 
-  if (loading) return <div className="text-center py-10 text-slate-400">Loading…</div>
+  if (loading) return (
+    <div className="text-center py-10" style={{ fontFamily:'var(--font-display)', fontWeight:700, color:'var(--duo-text-lt)' }}>
+      Loading…
+    </div>
+  )
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-extrabold text-slate-800">My Money</h1>
+      <h1 style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:24, color:'var(--duo-text)' }}>My Money</h1>
 
       {/* Big balance cards */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="clay-card bg-gradient-to-br from-emerald-400 to-teal-500 p-5 text-white text-center">
-          <div className="text-4xl mb-1">💵</div>
-          <div className="text-3xl font-black">${weekEarned.toFixed(2)}</div>
-          <div className="text-emerald-100 text-xs font-semibold mt-0.5">This Week</div>
+        {/* Allowance */}
+        <div className="duo-card overflow-hidden" style={{ borderColor:'#22C55E66' }}>
+          <div className="h-1.5" style={{ background:'#22C55E' }} />
+          <div className="p-4 text-center">
+            <div style={{ fontSize:36 }}>💵</div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:30, color:'#22C55E', lineHeight:1, marginTop:4 }}>
+              ${weekEarned.toFixed(2)}
+            </div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:11, color:'var(--duo-text-lt)', textTransform:'uppercase', marginTop:2 }}>
+              This Week
+            </div>
+          </div>
         </div>
-        <div className={`clay-card p-5 text-center ${isRoleModel && isSunday ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white' : 'bg-white'}`}>
-          <div className="text-4xl mb-1">{isRoleModel && isSunday ? '🛍️' : '🏪'}</div>
-          <div className={`text-3xl font-black ${isRoleModel && isSunday ? '' : 'text-slate-300'}`}>{totalEarned}</div>
-          <div className={`text-xs font-semibold mt-0.5 ${isRoleModel && isSunday ? 'text-amber-100' : 'text-slate-400'}`}>
-            {isRoleModel && isSunday ? '🎉 Canteen Open!' : isRoleModel ? 'Opens Sunday' : 'Role Model only'}
+
+        {/* Canteen */}
+        <div className="duo-card overflow-hidden"
+          style={{ borderColor: canteenOpen ? '#FF960066' : 'var(--duo-border)' }}>
+          <div className="h-1.5" style={{ background: canteenOpen ? '#FF9600' : '#E5E5E5' }} />
+          <div className="p-4 text-center">
+            <div style={{ fontSize:36 }}>{canteenOpen ? '🛍️' : '🏪'}</div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:30,
+                          color: canteenOpen ? '#FF9600' : '#AFAFAF', lineHeight:1, marginTop:4 }}>
+              {Math.round(totalEarned * 10)}
+            </div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:11, textTransform:'uppercase', marginTop:2,
+                          color: canteenOpen ? '#FF9600' : 'var(--duo-text-lt)' }}>
+              {canteenOpen ? '🎉 Open Now!' : isRoleModel ? 'Opens Sunday' : 'Role Model Only'}
+            </div>
           </div>
         </div>
       </div>
 
       {/* How to earn */}
-      <div className="clay-card bg-white p-4">
-        <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Earn up to $3/day</div>
+      <div className="duo-card p-4">
+        <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:12, color:'var(--duo-text-lt)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:12 }}>
+          Earn up to $3/day
+        </div>
         <div className="space-y-2">
           {TASKS.map(t => (
-            <div key={t.key} className="flex items-center gap-3 bg-slate-50 rounded-2xl px-3 py-2.5">
-              <span className="text-2xl">{t.emoji}</span>
-              <span className="font-semibold text-slate-700 flex-1 text-sm">{t.label}</span>
-              <span className="font-bold text-emerald-600">+$1.00</span>
+            <div key={t.key} className="flex items-center gap-3 rounded-2xl px-3 py-3"
+              style={{ background: t.bg, border:`2px solid ${t.color}33` }}>
+              <span style={{ fontSize:24 }}>{t.emoji}</span>
+              <span style={{ fontFamily:'var(--font-display)', fontWeight:800, color: t.color, flex:1, fontSize:14 }}>
+                {t.label}
+              </span>
+              <span className="rounded-full px-2 py-1"
+                style={{ background: t.color, color:'#fff', fontFamily:'var(--font-display)', fontWeight:800, fontSize:13 }}>
+                +$1
+              </span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Recent earnings */}
+      {/* Recent days */}
       {earnings.length > 0 && (
-        <div className="clay-card bg-white p-4">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Recent Days</div>
+        <div className="duo-card p-4">
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:12, color:'var(--duo-text-lt)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:12 }}>
+            Recent Earnings
+          </div>
           <div className="space-y-3">
-            {earnings.slice(0, 7).map(e => (
+            {earnings.slice(0,7).map(e => (
               <div key={e.id}>
                 <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-sm font-bold text-slate-700">{format(new Date(e.date), 'EEE, MMM d')}</span>
-                  <span className="font-black text-emerald-600">${(e.total_earned || 0).toFixed(2)}</span>
+                  <span style={{ fontFamily:'var(--font-display)', fontWeight:800, color:'var(--duo-text)', fontSize:14 }}>
+                    {format(new Date(e.date),'EEE, MMM d')}
+                  </span>
+                  <span style={{ fontFamily:'var(--font-display)', fontWeight:900, color:'#22C55E', fontSize:16 }}>
+                    ${(e.total_earned||0).toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex gap-2">
                   {TASKS.map(t => (
-                    <div key={t.key}
-                      className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full font-semibold
-                        ${e[t.key] ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
+                    <div key={t.key} className="flex items-center gap-1 rounded-full px-2.5 py-1"
+                      style={{
+                        background: e[t.key] ? t.bg : '#F7F7F7',
+                        border: `2px solid ${e[t.key] ? t.color+'66' : '#E5E5E5'}`,
+                        fontFamily:'var(--font-display)', fontWeight:700, fontSize:11,
+                        color: e[t.key] ? t.color : '#AFAFAF',
+                      }}>
                       {t.emoji} {e[t.key] ? '+$1' : '—'}
                     </div>
                   ))}
@@ -112,18 +152,27 @@ export default function MyMoney() {
         </div>
       )}
 
-      {/* Canteen redemptions */}
+      {/* Canteen history */}
       {redemptions.length > 0 && (
-        <div className="clay-card bg-white p-4">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Canteen History</div>
+        <div className="duo-card p-4">
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:12, color:'var(--duo-text-lt)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:12 }}>
+            Canteen History
+          </div>
           <div className="space-y-2">
             {redemptions.map(r => (
-              <div key={r.id} className="flex items-center justify-between bg-amber-50 rounded-2xl px-3 py-2.5">
+              <div key={r.id} className="flex items-center justify-between rounded-2xl px-3 py-2.5"
+                style={{ background:'#FFFBEB', border:'2px solid #FCD34D' }}>
                 <div>
-                  <div className="font-bold text-sm text-slate-700">{r.notes || '🛍️ Store item'}</div>
-                  <div className="text-xs text-slate-400">{format(new Date(r.redeemed_at), 'MMM d, yyyy')}</div>
+                  <div style={{ fontFamily:'var(--font-display)', fontWeight:800, color:'var(--duo-text)', fontSize:14 }}>
+                    {r.notes || '🛍️ Store item'}
+                  </div>
+                  <div style={{ fontFamily:'var(--font-body)', color:'var(--duo-text-lt)', fontSize:12 }}>
+                    {format(new Date(r.redeemed_at),'MMM d, yyyy')}
+                  </div>
                 </div>
-                <span className="font-black text-orange-500">−{r.points_redeemed} pts</span>
+                <span style={{ fontFamily:'var(--font-display)', fontWeight:900, color:'#FF9600', fontSize:15 }}>
+                  −{r.points_redeemed} pts
+                </span>
               </div>
             ))}
           </div>
@@ -131,10 +180,10 @@ export default function MyMoney() {
       )}
 
       {earnings.length === 0 && (
-        <div className="clay-card bg-white p-10 text-center">
-          <div className="text-4xl mb-2">💰</div>
-          <div className="text-slate-400 font-semibold">No earnings yet</div>
-          <div className="text-slate-300 text-sm mt-1">Complete daily tasks to earn your allowance!</div>
+        <div className="duo-card p-10 text-center">
+          <div style={{ fontSize:48 }}>💰</div>
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:800, color:'var(--duo-text)', fontSize:18, marginTop:8 }}>No earnings yet!</div>
+          <div style={{ fontFamily:'var(--font-body)', color:'var(--duo-text-lt)', fontSize:14, marginTop:4 }}>Complete daily tasks to earn your allowance.</div>
         </div>
       )}
     </div>

@@ -2,14 +2,26 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
-import { getLevel, LEVEL_CONFIG } from '../../lib/levels'
-import LevelBadge from '../../components/ui/LevelBadge'
-import { Star } from 'lucide-react'
+import { getLevel, LEVELS } from '../../lib/levels'
+import { Zap } from 'lucide-react'
+
+const DUO_LEVEL = {
+  [LEVELS.ORIENTATION]: { fill:'#94A3B8', bg:'#F1F5F9', text:'#64748B', emoji:'🌱' },
+  [LEVELS.REFOCUS]:     { fill:'#3B82F6', bg:'#EFF6FF', text:'#2563EB', emoji:'🔵' },
+  [LEVELS.RISING]:      { fill:'#F59E0B', bg:'#FFFBEB', text:'#D97706', emoji:'⭐' },
+  [LEVELS.ROLEMODEL]:   { fill:'#22C55E', bg:'#F0FDF4', text:'#16A34A', emoji:'🏆' },
+}
+
+const MEDAL_COLORS = [
+  { bg:'#FFD700', border:'#CC9900', text:'#664400' }, // gold
+  { bg:'#C0C0C0', border:'#999999', text:'#444444' }, // silver
+  { bg:'#CD7F32', border:'#996633', text:'#552200' }, // bronze
+]
 
 const TABS = [
-  { key: 'week',  label: 'Week' },
-  { key: 'month', label: 'Month' },
-  { key: 'all',   label: 'All Time' },
+  { key:'week',  label:'This Week' },
+  { key:'month', label:'Month' },
+  { key:'all',   label:'All Time' },
 ]
 
 export default function Leaderboard() {
@@ -31,84 +43,91 @@ export default function Leaderboard() {
   useEffect(() => {
     if (!Object.keys(kids).length) return
     setLoading(true)
-
-    let query = supabase.from('daily_logs').select('kid_id, total_pts')
     const now = new Date()
-
+    let q = supabase.from('daily_logs').select('kid_id, total_pts')
     if (tab === 'week') {
-      query = query
-        .gte('date', format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd'))
-        .lte('date', format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd'))
+      q = q.gte('date', format(startOfWeek(now,{weekStartsOn:1}),'yyyy-MM-dd'))
+           .lte('date', format(endOfWeek(now,{weekStartsOn:1}),'yyyy-MM-dd'))
     } else if (tab === 'month') {
-      query = query
-        .gte('date', format(startOfMonth(now), 'yyyy-MM-dd'))
-        .lte('date', format(endOfMonth(now), 'yyyy-MM-dd'))
+      q = q.gte('date', format(startOfMonth(now),'yyyy-MM-dd'))
+           .lte('date', format(endOfMonth(now),'yyyy-MM-dd'))
     }
-    // 'all' — no date filter
-
-    query.then(({ data }) => {
+    q.then(({ data }) => {
       const totals = {}
-      data?.forEach(l => { totals[l.kid_id] = (totals[l.kid_id] || 0) + l.total_pts })
+      data?.forEach(l => { totals[l.kid_id] = (totals[l.kid_id]||0) + l.total_pts })
       const r = Object.entries(totals)
-        .map(([kidId, total]) => ({ kid: kids[kidId], total }))
+        .map(([id,total]) => ({ kid: kids[id], total }))
         .filter(e => e.kid)
-        .sort((a, b) => b.total - a.total)
+        .sort((a,b) => b.total - a.total)
       setRanked(r)
       setLoading(false)
     })
   }, [tab, kids])
 
-  const myRank  = ranked.findIndex(r => r.kid?.id === profile?.id) + 1
-  const myEntry = ranked.find(r => r.kid?.id === profile?.id)
-  const medals  = ['🥇', '🥈', '🥉']
+  const myIdx   = ranked.findIndex(r => r.kid?.id === profile?.id)
+  const myEntry = myIdx >= 0 ? ranked[myIdx] : null
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-extrabold text-slate-800">Leaderboard</h1>
+      <h1 style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:24, color:'var(--duo-text)' }}>Leaderboard</h1>
 
-      {/* Tab selector */}
-      <div className="flex gap-1.5 bg-white/60 backdrop-blur p-1.5 rounded-2xl clay-card">
+      {/* Tabs */}
+      <div className="duo-card flex p-1 gap-1">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${
-              tab === t.key
-                ? 'bg-blue-500 text-white shadow-lg'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}>
+            className="flex-1 py-2.5 rounded-xl duo-btn transition-all"
+            style={{
+              background: tab === t.key ? '#1CB0F6' : 'transparent',
+              color: tab === t.key ? '#fff' : 'var(--duo-text-lt)',
+              fontFamily:'var(--font-display)', fontWeight:800, fontSize:12,
+              borderBottomColor: tab === t.key ? '#0A88CC' : 'transparent',
+              borderBottomWidth: tab === t.key ? '3px' : '0px',
+            }}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* My position banner */}
+      {/* My rank card */}
       {myEntry && (
-        <div className="clay-card bg-gradient-to-r from-blue-500 to-blue-600 p-4 flex items-center justify-between text-white">
+        <div className="duo-card p-4 flex items-center justify-between"
+          style={{ borderColor:'#1CB0F6', background:'#F0F9FF' }}>
           <div>
-            <div className="text-sm font-semibold text-blue-100">Your rank</div>
-            <div className="text-3xl font-black">#{myRank}</div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:700, color:'#1CB0F6', fontSize:12, textTransform:'uppercase' }}>Your rank</div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:36, color:'#1CB0F6', lineHeight:1 }}>
+              #{myIdx + 1}
+            </div>
           </div>
           <div className="text-right">
-            <div className="text-sm font-semibold text-blue-100">Your points</div>
-            <div className="text-3xl font-black">{myEntry.total}</div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:700, color:'#1CB0F6', fontSize:12, textTransform:'uppercase' }}>XP</div>
+            <div className="flex items-center gap-1">
+              <Zap size={18} color="#FF9600" fill="#FF9600" />
+              <span style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:36, color:'#FF9600', lineHeight:1 }}>
+                {myEntry.total}
+              </span>
+            </div>
           </div>
         </div>
       )}
 
       {loading ? (
         <div className="text-center py-10">
-          <div className="text-3xl animate-bounce">🏆</div>
-          <div className="text-slate-400 text-sm mt-2">Loading rankings…</div>
+          <div style={{ fontSize:40 }}>🏆</div>
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:700, color:'var(--duo-text-lt)', marginTop:8 }}>Loading…</div>
         </div>
       ) : ranked.length === 0 ? (
-        <div className="clay-card bg-white p-10 text-center">
-          <div className="text-4xl mb-2">😴</div>
-          <div className="text-slate-400 font-semibold">No points logged yet!</div>
+        <div className="duo-card p-10 text-center">
+          <div style={{ fontSize:48 }}>😴</div>
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:800, color:'var(--duo-text)', fontSize:18, marginTop:8 }}>No scores yet!</div>
         </div>
       ) : (
         <>
-          {/* Podium — top 3 */}
+          {/* Podium */}
           {ranked.length >= 2 && (
-            <div className="clay-card bg-white p-6">
+            <div className="duo-card p-6">
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:12, color:'var(--duo-text-lt)', textTransform:'uppercase', marginBottom:16, textAlign:'center' }}>
+                Top Performers
+              </div>
               <div className="flex items-end gap-2 justify-center">
                 {/* Silver */}
                 {ranked[1] && <PodiumSlot rank={2} entry={ranked[1]} myId={profile?.id} />}
@@ -123,31 +142,45 @@ export default function Leaderboard() {
           {/* Full list */}
           <div className="space-y-2">
             {ranked.map(({ kid, total }, i) => {
-              const level = getLevel(total)
-              const cfg   = LEVEL_CONFIG[level]
-              const isMe  = kid.id === profile?.id
+              const level  = getLevel(total)
+              const d      = DUO_LEVEL[level]
+              const isMe   = kid.id === profile?.id
+              const medal  = i < 3 ? MEDAL_COLORS[i] : null
 
               return (
-                <div key={kid.id}
-                  className={`clay-card flex items-center justify-between px-4 py-3.5 transition-all
-                    ${isMe ? 'bg-blue-50 ring-2 ring-blue-300' : 'bg-white'}`}>
+                <div key={kid.id} className="duo-card flex items-center justify-between px-4 py-3"
+                  style={{ borderColor: isMe ? '#1CB0F6' : 'var(--duo-border)',
+                           background: isMe ? '#F0F9FF' : '#fff' }}>
                   <div className="flex items-center gap-3">
-                    <span className="text-xl w-8 text-center font-bold">
-                      {i < 3 ? medals[i] : <span className="text-slate-400 text-base">#{i+1}</span>}
-                    </span>
-                    <div className={`w-10 h-10 rounded-2xl ${cfg.badgeBg} flex items-center justify-center text-lg`}>
-                      {cfg.emoji}
+                    {/* Rank badge */}
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+                      style={{ background: medal ? medal.bg : '#F7F7F7', border: `2px solid ${medal ? medal.border : '#E5E5E5'}` }}>
+                      <span style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:12, color: medal ? medal.text : '#AFAFAF' }}>
+                        {i+1}
+                      </span>
+                    </div>
+                    {/* Level avatar */}
+                    <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-xl"
+                      style={{ background: d.bg }}>
+                      {d.emoji}
                     </div>
                     <div>
-                      <div className={`font-bold text-sm ${isMe ? 'text-blue-700' : 'text-slate-800'}`}>
-                        {kid.initials}{isMe ? ' 👈 you' : ''}
+                      <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:15,
+                                    color: isMe ? '#1CB0F6' : 'var(--duo-text)' }}>
+                        {kid.initials}{isMe ? ' 👈' : ''}
                       </div>
-                      <LevelBadge level={level} size="sm" />
+                      <div className="rounded-full px-1.5 py-0.5 inline-block"
+                        style={{ background: d.bg, color: d.text, fontFamily:'var(--font-display)', fontWeight:700, fontSize:10 }}>
+                        {d.emoji} {LEVELS[level] || level}
+                      </div>
                     </div>
                   </div>
-                  <div className={`flex items-center gap-1 text-xl font-black ${isMe ? 'text-blue-700' : 'text-slate-700'}`}>
-                    {total}
-                    <Star size={14} className="text-amber-400 fill-amber-400 mb-0.5" />
+                  <div className="flex items-center gap-1">
+                    <Zap size={14} color="#FF9600" fill="#FF9600" />
+                    <span style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:20,
+                                   color: isMe ? '#1CB0F6' : 'var(--duo-text)' }}>
+                      {total}
+                    </span>
                   </div>
                 </div>
               )
@@ -162,22 +195,29 @@ export default function Leaderboard() {
 function PodiumSlot({ rank, entry, myId }) {
   const { kid, total } = entry
   const level = getLevel(total)
-  const cfg   = LEVEL_CONFIG[level]
+  const d     = DUO_LEVEL[level]
   const isMe  = kid.id === myId
-  const heights  = { 1: 'h-20', 2: 'h-14', 3: 'h-10' }
-  const sizesCls = { 1: 'w-16 h-16 text-2xl', 2: 'w-13 h-13 text-xl', 3: 'w-12 h-12 text-lg' }
-  const medals   = { 1: '🥇', 2: '🥈', 3: '🥉' }
+  const heights = { 1:'h-20', 2:'h-14', 3:'h-10' }
+  const medals  = { 1:'🥇', 2:'🥈', 3:'🥉' }
+  const fills   = { 1:'#FFD700', 2:'#C0C0C0', 3:'#CD7F32' }
 
   return (
-    <div className={`flex-1 flex flex-col items-center ${rank === 1 ? '-mt-4' : 'mt-2'}`}>
-      <div className="text-2xl mb-1">{medals[rank]}</div>
-      <div className={`w-14 h-14 rounded-2xl ${cfg.badgeBg} ${isMe ? 'ring-2 ring-blue-400' : ''} flex items-center justify-center text-2xl mb-1 shadow`}>
-        {cfg.emoji}
+    <div className={`flex-1 flex flex-col items-center ${rank===1 ? '-mt-4' : 'mt-2'}`}>
+      <div style={{ fontSize:24, lineHeight:1, marginBottom:4 }}>{medals[rank]}</div>
+      <div className="w-13 h-13 rounded-2xl flex items-center justify-center text-2xl mb-1"
+        style={{ background: d.bg, border: isMe ? '3px solid #1CB0F6' : `3px solid ${d.fill}`, width:52, height:52 }}>
+        {d.emoji}
       </div>
-      <div className={`font-bold text-sm ${isMe ? 'text-blue-600' : 'text-slate-700'}`}>{kid.initials}</div>
-      <div className="text-xs text-slate-400 mb-1">{total} pts</div>
-      <div className={`w-full ${heights[rank]} bg-gradient-to-t ${cfg.gradient} rounded-t-xl flex items-center justify-center`}>
-        <span className="text-white font-black text-lg">{rank}</span>
+      <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:13,
+                    color: isMe ? '#1CB0F6' : 'var(--duo-text)' }}>
+        {kid.initials}
+      </div>
+      <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:11, color:'var(--duo-text-lt)', marginBottom:6 }}>
+        {total} pts
+      </div>
+      <div className={`w-full ${heights[rank]} rounded-t-2xl flex items-center justify-center`}
+        style={{ background: fills[rank] }}>
+        <span style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:22, color:'#fff' }}>{rank}</span>
       </div>
     </div>
   )

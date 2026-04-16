@@ -2,76 +2,107 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { format, subDays } from 'date-fns'
-import LevelBadge from '../../components/ui/LevelBadge'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { AM_BEHAVIORS, PM_BEHAVIORS, OVERNIGHT_BEHAVIORS } from '../../lib/points'
-import { LEVEL_CONFIG, getLevel } from '../../lib/levels'
+import { getLevel, LEVELS } from '../../lib/levels'
+
+const DUO_LEVEL = {
+  [LEVELS.ORIENTATION]: { fill:'#94A3B8', bg:'#F1F5F9', text:'#64748B', label:'Orientation', emoji:'🌱' },
+  [LEVELS.REFOCUS]:     { fill:'#3B82F6', bg:'#EFF6FF', text:'#2563EB', label:'Re-Focus',    emoji:'🔵' },
+  [LEVELS.RISING]:      { fill:'#F59E0B', bg:'#FFFBEB', text:'#D97706', label:'Rising Star', emoji:'⭐' },
+  [LEVELS.ROLEMODEL]:   { fill:'#22C55E', bg:'#F0FDF4', text:'#16A34A', label:'Role Model',  emoji:'🏆' },
+}
+
+function BehaviorRow({ label, earned }) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 rounded-2xl text-sm"
+      style={{ background: earned ? '#F0FDF4' : '#F7F7F7', fontFamily:'var(--font-body)', fontWeight:600,
+               color: earned ? '#16A34A' : '#AFAFAF', textDecoration: earned ? 'none' : 'line-through' }}>
+      <span style={{ fontSize:15 }}>{earned ? '✅' : '❌'}</span>
+      <span className="flex-1">{label}</span>
+      <span style={{ fontFamily:'var(--font-display)', fontWeight:800, color: earned ? '#58CC02' : '#AFAFAF' }}>
+        {earned ? '+5' : '0'}
+      </span>
+    </div>
+  )
+}
 
 function DayCard({ log }) {
   const [open, setOpen] = useState(false)
   const level = log.level_achieved || getLevel(log.total_pts)
-  const cfg = LEVEL_CONFIG[level]
+  const d = DUO_LEVEL[level]
 
   return (
-    <div className={`clay-card overflow-hidden ${open ? 'ring-2 ring-blue-200' : 'bg-white'}`}>
-      <button className="w-full flex items-center justify-between px-4 py-4" onClick={() => setOpen(v => !v)}>
-        <div className="text-left flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-2xl ${cfg.badgeBg} flex items-center justify-center text-xl`}>{cfg.emoji}</div>
-          <div>
-            <div className="font-bold text-slate-800">{format(new Date(log.date), 'EEEE')}</div>
-            <div className="text-xs text-slate-400">{format(new Date(log.date), 'MMM d, yyyy')}</div>
-            <LevelBadge level={level} size="sm" />
+    <div className="duo-card overflow-hidden" style={{ borderColor: open ? d.fill + '66' : 'var(--duo-border)' }}>
+      {/* Color top strip */}
+      <div className="h-1.5" style={{ background: d.fill }} />
+
+      <button className="w-full flex items-center justify-between px-4 py-3.5 cursor-pointer"
+        onClick={() => setOpen(v => !v)}>
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-xl"
+            style={{ background: d.bg }}>
+            {d.emoji}
+          </div>
+          <div className="text-left">
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:800, color:'var(--duo-text)', fontSize:15 }}>
+              {format(new Date(log.date), 'EEEE')}
+            </div>
+            <div style={{ fontFamily:'var(--font-body)', color:'var(--duo-text-lt)', fontSize:12 }}>
+              {format(new Date(log.date), 'MMM d, yyyy')}
+            </div>
+            <div className="mt-0.5 rounded-full px-2 py-0.5 inline-block"
+              style={{ background: d.bg, color: d.text, fontFamily:'var(--font-display)', fontWeight:800, fontSize:11 }}>
+              {d.emoji} {d.label}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="text-right">
-            <div className={`text-3xl font-black ${cfg.textClass}`}>{log.total_pts}</div>
-            <div className="text-xs text-slate-400">pts</div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:32, color: d.fill, lineHeight:1 }}>
+              {log.total_pts}
+            </div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:10, color:'var(--duo-text-lt)', textTransform:'uppercase' }}>pts</div>
           </div>
-          <div className="text-slate-300">
-            {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-          </div>
+          <div style={{ color:'#AFAFAF' }}>{open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</div>
         </div>
       </button>
 
       {open && (
-        <div className="border-t border-slate-100 px-4 pb-4 pt-3 space-y-4">
+        <div className="border-t-2 border-[--duo-border] px-4 pb-4 pt-3 space-y-4">
           {[
-            { label: '☀️ Morning (6am–2pm)',         behaviors: AM_BEHAVIORS,        pts: log.am_pts, max: 40 },
-            { label: '🌆 Afternoon (2pm–10pm)',        behaviors: PM_BEHAVIORS,        pts: log.pm_pts, max: 50 },
-            { label: '🌙 Overnight (10pm–6am)',        behaviors: OVERNIGHT_BEHAVIORS, pts: log.ov_pts, max: 10 },
+            { label: '☀️ Morning (6am–2pm)',    behaviors: AM_BEHAVIORS,        pts: log.am_pts, max: 40 },
+            { label: '🌆 Afternoon (2pm–10pm)', behaviors: PM_BEHAVIORS,        pts: log.pm_pts, max: 50 },
+            { label: '🌙 Night (10pm–6am)',      behaviors: OVERNIGHT_BEHAVIORS, pts: log.ov_pts, max: 10 },
           ].map(shift => (
             <div key={shift.label}>
-              <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
+              <div className="flex justify-between mb-2"
+                style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:12,
+                         color: shift.pts === shift.max ? '#58CC02' : 'var(--duo-text-lt)' }}>
                 <span>{shift.label}</span>
-                <span className={shift.pts === shift.max ? 'text-emerald-600' : 'text-slate-400'}>
-                  {shift.pts ?? 0}/{shift.max} pts {shift.pts === shift.max ? '🎉' : ''}
-                </span>
+                <span>{shift.pts ?? 0}/{shift.max} pts {shift.pts === shift.max ? '🎉' : ''}</span>
               </div>
-              <div className="grid grid-cols-1 gap-1">
-                {shift.behaviors.map(b => (
-                  <div key={b.key}
-                    className={`flex items-center gap-2 text-xs py-1.5 px-3 rounded-xl font-medium
-                      ${log[b.key] ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-50 text-slate-400 line-through'}`}>
-                    <span className="text-base">{log[b.key] ? '✅' : '❌'}</span>
-                    {b.label}
-                    <span className="ml-auto font-bold">{log[b.key] ? '+5' : '0'}</span>
-                  </div>
-                ))}
+              {/* mini progress bar */}
+              <div className="duo-progress mb-2" style={{ height:8 }}>
+                <div className="duo-progress-fill" style={{ width:`${((shift.pts||0)/shift.max)*100}%`,
+                  background: shift.pts === shift.max ? '#58CC02' : '#FF9600' }} />
+              </div>
+              <div className="space-y-1">
+                {shift.behaviors.map(b => <BehaviorRow key={b.key} label={b.label} earned={!!log[b.key]} />)}
               </div>
             </div>
           ))}
 
           {(log.minor_infractions > 0 || log.major_infractions > 0) && (
-            <div className="bg-red-50 rounded-2xl px-3 py-2.5 space-y-1">
+            <div className="rounded-2xl px-3 py-3 space-y-1.5" style={{ background:'#FFF5F5', border:'2px solid #FFCCCC' }}>
               {log.minor_infractions > 0 && (
-                <div className="flex justify-between text-xs text-orange-700 font-bold">
+                <div className="flex justify-between" style={{ fontFamily:'var(--font-display)', fontWeight:800, color:'#FF6B00', fontSize:13 }}>
                   <span>⚠️ {log.minor_infractions}× Minor Infraction</span>
                   <span>−{log.minor_infractions * 20} pts</span>
                 </div>
               )}
               {log.major_infractions > 0 && (
-                <div className="flex justify-between text-xs text-red-700 font-bold">
+                <div className="flex justify-between" style={{ fontFamily:'var(--font-display)', fontWeight:800, color:'#FF4B4B', fontSize:13 }}>
                   <span>🚨 {log.major_infractions}× Major Infraction</span>
                   <span>−{log.major_infractions * 40} pts</span>
                 </div>
@@ -80,7 +111,8 @@ function DayCard({ log }) {
           )}
 
           {log.positive_experiences && (
-            <div className="bg-emerald-50 rounded-2xl px-3 py-2.5 text-xs text-emerald-700">
+            <div className="rounded-2xl px-3 py-2.5"
+              style={{ background:'#F0FDF4', color:'#16A34A', fontFamily:'var(--font-display)', fontWeight:700, fontSize:13 }}>
               ✨ {log.positive_experiences}
             </div>
           )}
@@ -92,40 +124,52 @@ function DayCard({ log }) {
 
 export default function MyPoints() {
   const { profile } = useAuth()
-  const [logs, setLogs]     = useState([])
-  const [range, setRange]   = useState(14)
+  const [logs, setLogs]       = useState([])
+  const [range, setRange]     = useState(14)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!profile?.id) return
     setLoading(true)
-    const since = range === 0 ? null : format(subDays(new Date(), range), 'yyyy-MM-dd')
-    let query = supabase.from('daily_logs').select('*').eq('kid_id', profile.id).order('date', { ascending: false })
-    if (since) query = query.gte('date', since)
-    query.then(({ data }) => { setLogs(data || []); setLoading(false) })
+    let q = supabase.from('daily_logs').select('*').eq('kid_id', profile.id).order('date', { ascending: false })
+    if (range !== 0) q = q.gte('date', format(subDays(new Date(), range), 'yyyy-MM-dd'))
+    q.then(({ data }) => { setLogs(data || []); setLoading(false) })
   }, [profile?.id, range])
+
+  const RANGES = [{ v:7,label:'7d'},{v:14,label:'14d'},{v:30,label:'30d'},{v:0,label:'All'}]
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-extrabold text-slate-800">My Points</h1>
-        <div className="flex gap-1 bg-white/60 clay-card p-1 rounded-xl">
-          {[7, 14, 30, 0].map(d => (
-            <button key={d} onClick={() => setRange(d)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${range === d ? 'bg-blue-500 text-white shadow' : 'text-slate-500'}`}>
-              {d === 0 ? 'All' : `${d}d`}
+        <h1 style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:24, color:'var(--duo-text)' }}>
+          My Points
+        </h1>
+        <div className="flex gap-1 p-1 rounded-2xl duo-card">
+          {RANGES.map(r => (
+            <button key={r.v} onClick={() => setRange(r.v)}
+              className="px-3 py-1.5 rounded-xl transition-all duo-btn"
+              style={{
+                background: range === r.v ? '#58CC02' : 'transparent',
+                color: range === r.v ? '#fff' : 'var(--duo-text-lt)',
+                fontFamily:'var(--font-display)', fontWeight:800, fontSize:12,
+                borderBottomWidth: range === r.v ? '3px' : '0px',
+                borderBottomColor: '#46A302',
+              }}>
+              {r.label}
             </button>
           ))}
         </div>
       </div>
 
       {loading ? (
-        <div className="text-center py-10 text-slate-400">Loading…</div>
+        <div className="text-center py-10" style={{ color:'var(--duo-text-lt)', fontFamily:'var(--font-display)', fontWeight:700 }}>
+          Loading…
+        </div>
       ) : logs.length === 0 ? (
-        <div className="clay-card bg-white p-10 text-center">
-          <div className="text-4xl mb-2">📋</div>
-          <div className="text-slate-400 font-semibold">No points logged yet</div>
-          <div className="text-slate-300 text-sm mt-1">Ask your staff to log your daily points!</div>
+        <div className="duo-card p-10 text-center">
+          <div style={{ fontSize:48 }}>📋</div>
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:800, color:'var(--duo-text)', fontSize:18, marginTop:8 }}>No points yet!</div>
+          <div style={{ fontFamily:'var(--font-body)', color:'var(--duo-text-lt)', fontSize:14, marginTop:4 }}>Ask your staff to log your daily points.</div>
         </div>
       ) : (
         <div className="space-y-3">
