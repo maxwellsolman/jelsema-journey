@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { Eye, EyeOff } from 'lucide-react'
 
 export default function Login() {
-  const { signIn } = useAuth()
+  const { signIn, profile } = useAuth()
+  const navigate = useNavigate()
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [error, setError]       = useState('')
@@ -13,6 +15,12 @@ export default function Login() {
   const [showForgot, setShowForgot] = useState(false)
   const [resetSent, setResetSent]   = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
+
+  useEffect(() => {
+    if (profile) {
+      navigate(profile.role === 'admin' ? '/admin' : '/me', { replace: true })
+    }
+  }, [profile])
 
   async function handleSubmit(e) {
     e.preventDefault()

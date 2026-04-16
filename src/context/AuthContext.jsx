@@ -16,11 +16,13 @@ export function AuthProvider({ children }) {
     }
 
     // Check admins table first
-    const { data: admin } = await supabase
+    const { data: admin, error: adminErr } = await supabase
       .from('admins')
       .select('*')
       .eq('user_id', authUser.id)
       .single()
+
+    console.log('admin query:', admin, adminErr)
 
     if (admin) {
       setProfile({ role: 'admin', ...admin })
@@ -29,11 +31,13 @@ export function AuthProvider({ children }) {
     }
 
     // Check kids table
-    const { data: kid } = await supabase
+    const { data: kid, error: kidErr } = await supabase
       .from('kids')
       .select('*')
       .eq('user_id', authUser.id)
       .single()
+
+    console.log('kid query:', kid, kidErr)
 
     if (kid) {
       setProfile({ role: 'kid', ...kid })
@@ -52,16 +56,21 @@ export function AuthProvider({ children }) {
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setLoading(true)
       setUser(session?.user ?? null)
-      fetchProfile(session?.user ?? null)
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
   async function signIn(email, password) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    setLoading(true)
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (!error && data.user) {
+      setUser(data.user)
+      await fetchProfile(data.user)
+    } else {
+      setLoading(false)
+    }
     return { error }
   }
 
