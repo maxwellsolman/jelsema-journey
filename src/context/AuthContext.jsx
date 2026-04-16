@@ -15,34 +15,34 @@ export function AuthProvider({ children }) {
       return
     }
 
-    // Check admins table first
-    const { data: admin, error: adminErr } = await supabase
-      .from('admins')
-      .select('*')
-      .eq('user_id', authUser.id)
-      .single()
+    try {
+      // Check admins table first
+      const { data: admin } = await supabase
+        .from('admins')
+        .select('*')
+        .eq('user_id', authUser.id)
+        .single()
 
-    console.log('admin query:', admin, adminErr)
+      if (admin) {
+        setProfile({ role: 'admin', ...admin })
+        setLoading(false)
+        return
+      }
 
-    if (admin) {
-      setProfile({ role: 'admin', ...admin })
-      setLoading(false)
-      return
-    }
+      // Check kids table
+      const { data: kid } = await supabase
+        .from('kids')
+        .select('*')
+        .eq('user_id', authUser.id)
+        .single()
 
-    // Check kids table
-    const { data: kid, error: kidErr } = await supabase
-      .from('kids')
-      .select('*')
-      .eq('user_id', authUser.id)
-      .single()
-
-    console.log('kid query:', kid, kidErr)
-
-    if (kid) {
-      setProfile({ role: 'kid', ...kid })
-      setLoading(false)
-      return
+      if (kid) {
+        setProfile({ role: 'kid', ...kid })
+        setLoading(false)
+        return
+      }
+    } catch (err) {
+      // ignore
     }
 
     setProfile(null)
@@ -64,14 +64,19 @@ export function AuthProvider({ children }) {
 
   async function signIn(email, password) {
     setLoading(true)
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (!error && data.user) {
-      setUser(data.user)
-      await fetchProfile(data.user)
-    } else {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      if (!error && data.user) {
+        setUser(data.user)
+        await fetchProfile(data.user)
+      } else {
+        setLoading(false)
+      }
+      return { error }
+    } catch (err) {
       setLoading(false)
+      return { error: err }
     }
-    return { error }
   }
 
   async function signOut() {

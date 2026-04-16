@@ -48,13 +48,6 @@ export default function ManageKids() {
     if (!initials || !email || !password) { setError('Initials, email, and password are required.'); return }
     setSaving(true); setError('')
 
-    // Create auth user
-    const { data: authData, error: authErr } = await supabase.auth.admin
-      ? { data: null, error: { message: 'Use service role for user creation' } }
-      : { data: null, error: null }
-
-    // For MVP: create auth user via signUp (admin must be signed in)
-    // In production, use a server-side function with service role key
     const { data: newUser, error: signUpErr } = await supabase.auth.signUp({
       email,
       password,
