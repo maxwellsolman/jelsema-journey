@@ -180,8 +180,9 @@ export default function ManageKids() {
               </div>
             </div>
             <button onClick={() => handleDeactivate(kid)}
-              className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Discharge">
-              <UserX size={16} />
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors text-xs font-semibold border border-transparent hover:border-red-100">
+              <UserX size={14} />
+              Discharge
             </button>
           </div>
         ))}
