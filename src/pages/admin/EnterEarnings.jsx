@@ -11,7 +11,11 @@ const TASKS = [
 
 function TaskCheck({ task, checked, onChange }) {
   return (
-    <label className={`flex items-center gap-4 p-4 rounded-2xl cursor-pointer transition-all border ${checked ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-100 hover:border-slate-200'}`}>
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={`w-full flex items-center gap-4 p-4 rounded-2xl cursor-pointer transition-all border text-left ${checked ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-100 hover:border-slate-200 hover:bg-slate-100'}`}
+    >
       <span className="text-2xl">{task.emoji}</span>
       <div className="flex-1">
         <div className={`font-semibold text-sm ${checked ? 'text-emerald-700' : 'text-slate-700'}`}>{task.label}</div>
@@ -20,7 +24,7 @@ function TaskCheck({ task, checked, onChange }) {
       <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${checked ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
         {checked && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
       </div>
-    </label>
+    </button>
   )
 }
 
