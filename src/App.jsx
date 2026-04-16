@@ -40,6 +40,12 @@ function RequireAuth({ children, role }) {
 
 function RootRedirect() {
   const { user, profile, loading } = useAuth()
+
+  // If the URL hash contains a recovery token, send to reset page immediately
+  if (typeof window !== 'undefined' && window.location.hash.includes('type=recovery')) {
+    return <Navigate to={`/reset-password${window.location.hash}`} replace />
+  }
+
   if (loading) return null
   if (!user || !profile) return <Navigate to="/login" replace />
   return <Navigate to={profile.role === 'admin' ? '/admin' : '/me'} replace />
