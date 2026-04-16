@@ -13,7 +13,7 @@ const NAV = [
   { to: '/admin/infractions', label: 'Infractions',  icon: AlertTriangle },
   { to: '/admin/payout',    label: 'Weekly Payout',  icon: DollarSign },
   { to: '/admin/winner',    label: 'Kid of the Week',icon: Trophy },
-  { to: '/admin/canteen',   label: 'iCanTeen Store', icon: ShoppingBag },
+  { to: '/admin/canteen',   label: 'Canteen Store',  icon: ShoppingBag },
   { to: '/admin/reports',   label: 'Reports',        icon: BarChart2 },
   { to: '/admin/kids',      label: 'Manage Kids',    icon: Users },
 ]

@@ -100,9 +100,9 @@ export function progressToNextLevel(pts) {
 }
 
 /**
- * Check if kid can access iCanTeen store (Role Model only, Sundays)
+ * Check if kid can access Canteen store (Role Model only, Sundays)
  */
-export function canAccessiCanTeen(level, date = new Date()) {
+export function canAccessCanteen(level, date = new Date()) {
   if (level !== LEVELS.ROLEMODEL) return false
   return date.getDay() === 0 // Sunday
 }

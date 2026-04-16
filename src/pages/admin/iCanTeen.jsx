@@ -56,14 +56,14 @@ export default function ICanTeen() {
       <div className="flex items-center gap-3">
         <ShoppingBag className="text-emerald-500" size={24} />
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">iCanTeen Store</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Canteen Store</h1>
           <p className="text-slate-500 text-sm">Available Sundays · Role Model level only</p>
         </div>
       </div>
 
       {!isSunday && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
-          ⚠️ The iCanTeen Store is only open on Sundays. You can still log redemptions, but kids won't see the store until Sunday.
+          ⚠️ The Canteen Store is only open on Sundays. You can still log redemptions, but kids won't see the store until Sunday.
         </div>
       )}
 

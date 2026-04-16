@@ -1,13 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Baloo+2:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  * {
-    box-sizing: border-box;
-  }
+  * { box-sizing: border-box; }
   body {
     margin: 0;
     font-family: 'Inter', system-ui, sans-serif;
@@ -15,9 +13,41 @@
     color: #0f172a;
     -webkit-font-smoothing: antialiased;
   }
-  #root {
-    min-height: 100svh;
-  }
+  #root { min-height: 100svh; }
+}
+
+/* Kid portal uses Baloo 2 for a fun, playful feel */
+.kid-font {
+  font-family: 'Baloo 2', system-ui, sans-serif;
+}
+
+/* Claymorphism card */
+.clay-card {
+  border-radius: 24px;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.6) inset,
+    0 -1px 0 rgba(0,0,0,0.08) inset,
+    0 8px 24px rgba(0,0,0,0.10),
+    0 2px 6px rgba(0,0,0,0.06);
+}
+
+.clay-btn {
+  border-radius: 16px;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.5) inset,
+    0 -2px 0 rgba(0,0,0,0.15) inset,
+    0 4px 12px rgba(0,0,0,0.15);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.clay-btn:active {
+  transform: translateY(2px) scale(0.97);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.5) inset, 0 -1px 0 rgba(0,0,0,0.15) inset, 0 2px 6px rgba(0,0,0,0.12);
+}
+
+/* Animated gradient background for kid portal */
+.kid-bg {
+  background: linear-gradient(135deg, #EFF6FF 0%, #FEF3C7 50%, #ECFDF5 100%);
+  min-height: 100svh;
 }
 
 @layer utilities {
@@ -25,7 +55,5 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
 }

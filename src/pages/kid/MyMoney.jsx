@@ -2,13 +2,12 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { format, subDays, startOfWeek, endOfWeek } from 'date-fns'
-import { DollarSign, ShoppingBag } from 'lucide-react'
 import { getLevel, LEVELS } from '../../lib/levels'
 
 const TASKS = [
-  { key: 'reading_log', label: 'Reading Log', emoji: '📚' },
-  { key: 'planner',     label: 'Planner/Journal', emoji: '📓' },
-  { key: 'mindfulness', label: 'Mindfulness', emoji: '🧘' },
+  { key: 'reading_log', label: 'Reading Log',   emoji: '📚' },
+  { key: 'planner',     label: 'Journal',        emoji: '📓' },
+  { key: 'mindfulness', label: 'Mindfulness',    emoji: '🧘' },
 ]
 
 export default function MyMoney() {
@@ -25,25 +24,21 @@ export default function MyMoney() {
   useEffect(() => {
     if (!profile?.id) return
     async function load() {
-      // Last 30 days of earnings
       const since = format(subDays(new Date(), 30), 'yyyy-MM-dd')
       const { data: earnsData } = await supabase.from('daily_earnings').select('*')
         .eq('kid_id', profile.id).gte('date', since).order('date', { ascending: false })
       setEarnings(earnsData || [])
 
-      // This week's total
       const wStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
       const wEnd   = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
       const wEarns = (earnsData || []).filter(e => e.date >= wStart && e.date <= wEnd)
       setWeekEarned(wEarns.reduce((s, e) => s + (e.total_earned || 0), 0))
       setTotalEarned((earnsData || []).reduce((s, e) => s + (e.total_earned || 0), 0))
 
-      // Today's level for canteen access
       const { data: log } = await supabase.from('daily_logs').select('total_pts')
         .eq('kid_id', profile.id).eq('date', today).single()
       setTodayLevel(log ? getLevel(log.total_pts) : null)
 
-      // Redemption history
       const { data: redeemData } = await supabase.from('canteen_redemptions')
         .select('*').eq('kid_id', profile.id).order('redeemed_at', { ascending: false }).limit(10)
       setRedemptions(redeemData || [])
@@ -55,45 +50,59 @@ export default function MyMoney() {
 
   const isRoleModel = todayLevel === LEVELS.ROLEMODEL
 
-  if (loading) return <div className="text-slate-400 text-sm text-center py-10">Loading…</div>
+  if (loading) return <div className="text-center py-10 text-slate-400">Loading…</div>
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-slate-800">My Money</h1>
+      <h1 className="text-2xl font-extrabold text-slate-800">My Money</h1>
 
-      {/* Balance cards */}
+      {/* Big balance cards */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center">
-          <DollarSign className="text-emerald-500 mx-auto mb-1" size={22} />
-          <div className="text-3xl font-black text-emerald-700">${weekEarned.toFixed(2)}</div>
-          <div className="text-xs text-slate-500 font-semibold mt-0.5">This Week</div>
+        <div className="clay-card bg-gradient-to-br from-emerald-400 to-teal-500 p-5 text-white text-center">
+          <div className="text-4xl mb-1">💵</div>
+          <div className="text-3xl font-black">${weekEarned.toFixed(2)}</div>
+          <div className="text-emerald-100 text-xs font-semibold mt-0.5">This Week</div>
         </div>
-        <div className={`rounded-2xl p-4 text-center border ${isRoleModel && isSunday ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-100'}`}>
-          <ShoppingBag className={`mx-auto mb-1 ${isRoleModel && isSunday ? 'text-amber-500' : 'text-slate-300'}`} size={22} />
-          <div className={`text-3xl font-black ${isRoleModel && isSunday ? 'text-amber-700' : 'text-slate-400'}`}>{totalEarned}</div>
-          <div className="text-xs text-slate-500 font-semibold mt-0.5">Canteen Pts</div>
-          {isRoleModel && isSunday && <div className="text-xs text-amber-600 font-bold">Store is OPEN!</div>}
-          {!isRoleModel && <div className="text-xs text-slate-400">Role Model only</div>}
-          {isRoleModel && !isSunday && <div className="text-xs text-slate-400">Opens Sunday</div>}
+        <div className={`clay-card p-5 text-center ${isRoleModel && isSunday ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white' : 'bg-white'}`}>
+          <div className="text-4xl mb-1">{isRoleModel && isSunday ? '🛍️' : '🏪'}</div>
+          <div className={`text-3xl font-black ${isRoleModel && isSunday ? '' : 'text-slate-300'}`}>{totalEarned}</div>
+          <div className={`text-xs font-semibold mt-0.5 ${isRoleModel && isSunday ? 'text-amber-100' : 'text-slate-400'}`}>
+            {isRoleModel && isSunday ? '🎉 Canteen Open!' : isRoleModel ? 'Opens Sunday' : 'Role Model only'}
+          </div>
         </div>
       </div>
 
-      {/* This week's task breakdown */}
-      {earnings.slice(0, 7).length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Recent Days</div>
+      {/* How to earn */}
+      <div className="clay-card bg-white p-4">
+        <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Earn up to $3/day</div>
+        <div className="space-y-2">
+          {TASKS.map(t => (
+            <div key={t.key} className="flex items-center gap-3 bg-slate-50 rounded-2xl px-3 py-2.5">
+              <span className="text-2xl">{t.emoji}</span>
+              <span className="font-semibold text-slate-700 flex-1 text-sm">{t.label}</span>
+              <span className="font-bold text-emerald-600">+$1.00</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Recent earnings */}
+      {earnings.length > 0 && (
+        <div className="clay-card bg-white p-4">
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Recent Days</div>
           <div className="space-y-3">
             {earnings.slice(0, 7).map(e => (
               <div key={e.id}>
                 <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-sm font-semibold text-slate-700">{format(new Date(e.date), 'EEE, MMM d')}</span>
-                  <span className="font-bold text-emerald-600">${(e.total_earned || 0).toFixed(2)}</span>
+                  <span className="text-sm font-bold text-slate-700">{format(new Date(e.date), 'EEE, MMM d')}</span>
+                  <span className="font-black text-emerald-600">${(e.total_earned || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex gap-2">
                   {TASKS.map(t => (
-                    <div key={t.key} className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${e[t.key] ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
-                      <span>{t.emoji}</span>
-                      {e[t.key] ? '+$1' : '—'}
+                    <div key={t.key}
+                      className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full font-semibold
+                        ${e[t.key] ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
+                      {t.emoji} {e[t.key] ? '+$1' : '—'}
                     </div>
                   ))}
                 </div>
@@ -103,18 +112,18 @@ export default function MyMoney() {
         </div>
       )}
 
-      {/* Redemption history */}
+      {/* Canteen redemptions */}
       {redemptions.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">iCanTeen Redemptions</div>
+        <div className="clay-card bg-white p-4">
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Canteen History</div>
           <div className="space-y-2">
             {redemptions.map(r => (
-              <div key={r.id} className="flex items-center justify-between text-sm">
+              <div key={r.id} className="flex items-center justify-between bg-amber-50 rounded-2xl px-3 py-2.5">
                 <div>
-                  <span className="font-semibold text-slate-700">{r.notes || 'Store item'}</span>
+                  <div className="font-bold text-sm text-slate-700">{r.notes || '🛍️ Store item'}</div>
                   <div className="text-xs text-slate-400">{format(new Date(r.redeemed_at), 'MMM d, yyyy')}</div>
                 </div>
-                <span className="font-bold text-orange-500">−{r.points_redeemed} pts</span>
+                <span className="font-black text-orange-500">−{r.points_redeemed} pts</span>
               </div>
             ))}
           </div>
@@ -122,8 +131,10 @@ export default function MyMoney() {
       )}
 
       {earnings.length === 0 && (
-        <div className="text-slate-400 text-sm text-center bg-white rounded-2xl p-10 border border-slate-100">
-          No earnings logged yet. Complete daily tasks to earn allowance!
+        <div className="clay-card bg-white p-10 text-center">
+          <div className="text-4xl mb-2">💰</div>
+          <div className="text-slate-400 font-semibold">No earnings yet</div>
+          <div className="text-slate-300 text-sm mt-1">Complete daily tasks to earn your allowance!</div>
         </div>
       )}
     </div>
