@@ -20,7 +20,7 @@ export default function Login() {
     setLoading(true)
     const { error } = await signIn(email.trim(), password)
     setLoading(false)
-    if (error) setError('Invalid email or password. Please try again.')
+    if (error) setError(error.message)
   }
 
   async function handleForgot(e) {
