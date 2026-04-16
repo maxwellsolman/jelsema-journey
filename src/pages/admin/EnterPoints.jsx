@@ -8,13 +8,17 @@ import { useAuth } from '../../context/AuthContext'
 
 function BehaviorCheck({ label, checked, onChange }) {
   return (
-    <label className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${checked ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-100 hover:bg-slate-100'}`}>
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className={`w-full flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors text-left ${checked ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-100 hover:bg-slate-100'}`}
+    >
       <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${checked ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
         {checked && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
       </div>
       <span className={`text-sm font-medium flex-1 ${checked ? 'text-emerald-700' : 'text-slate-600'}`}>{label}</span>
       <span className={`text-xs font-bold ${checked ? 'text-emerald-500' : 'text-slate-300'}`}>+5</span>
-    </label>
+    </button>
   )
 }
 
@@ -205,27 +209,31 @@ export default function EnterPoints() {
 
           {/* Infractions */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-4">
-            <h3 className="font-bold text-slate-700">Infractions</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-700">Infractions</h3>
+              <span className="text-xs text-slate-400">Use − to remove a mistaken entry</span>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-orange-600 mb-1.5">Minor ({MINOR_DEDUCTION} pts each)</label>
+                <label className="block text-xs font-semibold text-orange-600 mb-1.5">⚠️ Minor (−{MINOR_DEDUCTION} pts · 24hr freeze)</label>
                 <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => setMinors(m => Math.max(0, m - 1))} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-lg font-bold flex items-center justify-center">−</button>
+                  <button type="button" onClick={() => setMinors(m => Math.max(0, m - 1))} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-lg font-bold flex items-center justify-center" title="Remove one minor infraction">−</button>
                   <span className="text-2xl font-bold text-slate-800 w-8 text-center">{minors}</span>
-                  <button type="button" onClick={() => setMinors(m => m + 1)} className="w-9 h-9 rounded-xl bg-orange-100 hover:bg-orange-200 text-lg font-bold text-orange-600 flex items-center justify-center">+</button>
+                  <button type="button" onClick={() => setMinors(m => m + 1)} className="w-9 h-9 rounded-xl bg-orange-100 hover:bg-orange-200 text-lg font-bold text-orange-600 flex items-center justify-center" title="Add minor infraction">+</button>
                 </div>
-                {minors > 0 && <div className="text-xs text-orange-500 mt-1">−{minors * MINOR_DEDUCTION} pts · 24hr freeze</div>}
+                {minors > 0 && <div className="text-xs text-orange-500 mt-1 font-semibold">−{minors * MINOR_DEDUCTION} pts total</div>}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-red-600 mb-1.5">Major ({MAJOR_DEDUCTION} pts each)</label>
+                <label className="block text-xs font-semibold text-red-600 mb-1.5">🚨 Major (−{MAJOR_DEDUCTION} pts · 48hr freeze)</label>
                 <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => setMajors(m => Math.max(0, m - 1))} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-lg font-bold flex items-center justify-center">−</button>
+                  <button type="button" onClick={() => setMajors(m => Math.max(0, m - 1))} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-lg font-bold flex items-center justify-center" title="Remove one major infraction">−</button>
                   <span className="text-2xl font-bold text-slate-800 w-8 text-center">{majors}</span>
-                  <button type="button" onClick={() => setMajors(m => m + 1)} className="w-9 h-9 rounded-xl bg-red-100 hover:bg-red-200 text-lg font-bold text-red-600 flex items-center justify-center">+</button>
+                  <button type="button" onClick={() => setMajors(m => m + 1)} className="w-9 h-9 rounded-xl bg-red-100 hover:bg-red-200 text-lg font-bold text-red-600 flex items-center justify-center" title="Add major infraction">+</button>
                 </div>
-                {majors > 0 && <div className="text-xs text-red-500 mt-1">−{majors * MAJOR_DEDUCTION} pts · 48hr freeze</div>}
+                {majors > 0 && <div className="text-xs text-red-500 mt-1 font-semibold">−{majors * MAJOR_DEDUCTION} pts total</div>}
               </div>
             </div>
+            <p className="text-xs text-slate-400">Changes only take effect when you hit Save Points below.</p>
           </div>
 
           {/* Notes */}
