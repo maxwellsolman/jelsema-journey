@@ -177,6 +177,43 @@
 }
 .count-up { animation: countUp 400ms ease-out forwards; }
 
+/* ── Floating particles ───────────────────────────────── */
+@keyframes float-gentle {
+  0%,100% { transform: translateY(0px) rotate(0deg) scale(1); }
+  33%      { transform: translateY(-14px) rotate(-6deg) scale(1.08); }
+  66%      { transform: translateY(-7px) rotate(6deg) scale(0.94); }
+}
+.float-particle { animation: float-gentle var(--dur,4s) ease-in-out var(--del,0s) infinite; }
+
+/* ── Staggered slide-up entrance ─────────────────────── */
+@keyframes slide-up {
+  from { transform: translateY(22px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.slide-up { animation: slide-up 420ms cubic-bezier(0.22,1,0.36,1) var(--delay,0ms) backwards; }
+
+/* ── Pop-in for numbers ───────────────────────────────── */
+@keyframes pop-in {
+  0%   { transform: scale(0.4); opacity: 0; }
+  65%  { transform: scale(1.18); }
+  100% { transform: scale(1);   opacity: 1; }
+}
+.pop-in { animation: pop-in 550ms cubic-bezier(0.34,1.56,0.64,1) var(--delay,0ms) backwards; }
+
+/* ── Wiggle (for streak/XP pill) ─────────────────────── */
+@keyframes wiggle {
+  0%,100% { transform: rotate(-8deg); }
+  50%     { transform: rotate(8deg); }
+}
+.wiggle { animation: wiggle 0.5s ease-in-out 3; }
+
+/* ── Role Model glow ──────────────────────────────────── */
+@keyframes rm-glow {
+  0%,100% { box-shadow: 0 0 0 0 rgba(88,204,2,0.35), 0 4px 24px rgba(88,204,2,0.15); }
+  50%     { box-shadow: 0 0 0 10px rgba(88,204,2,0), 0 4px 32px rgba(88,204,2,0.3); }
+}
+.rm-glow { animation: rm-glow 2.5s ease-in-out infinite; }
+
 /* ── Confetti fall ────────────────────────────────────── */
 @keyframes confetti-fall {
   0%   { transform: translateY(-40px) rotate(0deg);    opacity: 1; }
