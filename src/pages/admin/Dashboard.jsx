@@ -161,44 +161,42 @@ export default function AdminDashboard() {
                 >
                   {/* Card header */}
                   <div className="p-4 flex items-start justify-between">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-bold shrink-0 ${cfg ? cfg.badgeBg : 'bg-slate-100'}`}>
                         {cfg ? cfg.emoji : '?'}
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="font-bold text-slate-800 text-base">{kid.initials}</div>
-                        {level
-                          ? <LevelBadge level={level} size="sm" />
-                          : <span className="text-xs text-slate-400">Not logged yet</span>
-                        }
-                        {isFrozen && <div className="text-xs text-red-500 font-medium mt-0.5">⛔ Frozen</div>}
+                        {isFrozen && <div className="text-xs text-red-500 font-medium">⛔ Frozen</div>}
+                        {/* Today's status — small, flagged if missing */}
+                        {total !== null ? (
+                          <div className={`text-xs font-semibold mt-0.5 ${cfg?.textClass || 'text-slate-600'}`}>
+                            Today: {total} pts
+                          </div>
+                        ) : (
+                          <div className="text-xs font-bold mt-0.5 text-amber-500 flex items-center gap-1">
+                            ⚠️ Needs logging
+                          </div>
+                        )}
                       </div>
                     </div>
+                    {/* Big number: weekly total */}
                     <div className="text-right shrink-0 ml-2">
-                      {total !== null ? (
-                        <>
-                          <div className={`text-2xl font-black leading-none ${cfg?.textClass || 'text-slate-800'}`}>{total}</div>
-                          <div className="text-xs text-slate-400">pts today</div>
-                        </>
-                      ) : (
-                        <div className="text-slate-300 text-xl font-bold">—</div>
-                      )}
+                      <div className="text-3xl font-black leading-none text-slate-800">{weekPts}</div>
+                      <div className="text-xs text-slate-400 mt-0.5">pts this wk</div>
                     </div>
                   </div>
 
                   {/* Card footer: weekly balance + intake */}
                   <div className="px-4 pb-3 space-y-2">
-                    {/* Weekly balance */}
+                    {/* Canteen balance */}
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-400 flex items-center gap-1">
                         <ShoppingBag size={10} /> Canteen balance
                       </span>
                       <span className={`font-bold ${balance > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
                         {balance} pts
-                        {weekRedeemed > 0
-                          ? <span className="text-slate-400 font-normal ml-1">({weekPts} earned · −{weekRedeemed} spent)</span>
-                          : <span className="text-slate-400 font-normal ml-1">({weekPts} earned this wk)</span>
-                        }
+                        {weekRedeemed > 0 && <span className="text-red-400 font-normal ml-1">−{weekRedeemed} spent</span>}
                       </span>
                     </div>
 

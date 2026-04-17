@@ -242,11 +242,11 @@ export default function EnterPoints() {
     <div className="flex min-h-full">
 
       {/* ── Center column ── */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 max-w-2xl">
 
         {/* Sticky date navigator */}
         <div className="sticky top-14 md:top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-100 shadow-sm">
-          <div className="flex items-center justify-between px-6 py-3 max-w-2xl">
+          <div className="flex items-center justify-between px-6 py-3">
             <button
               onClick={handlePrevDay}
               className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors"
@@ -300,7 +300,7 @@ export default function EnterPoints() {
         </div>
 
         {/* Form */}
-        <div className="p-5 md:p-6 space-y-5 max-w-2xl">
+        <div className="p-5 md:p-6 space-y-5">
 
           {!selectedKid && (
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center">
