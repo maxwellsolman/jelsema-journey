@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { format, addHours } from 'date-fns'
-import { UserPlus, UserX, X, Copy, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
+import { format, addHours, startOfWeek, subDays } from 'date-fns'
+import { UserPlus, UserX, X, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
+import { getLevel } from '../../lib/levels'
 
 function Modal({ title, onClose, children }) {
   return (
@@ -37,16 +38,17 @@ export default function ManageKids() {
   const [deleteConfirm, setDeleteConfirm] = useState(null) // kid to confirm delete
   const [deleteTyped, setDeleteTyped]     = useState('')
 
-  const [initials, setInitials]       = useState('')
-  const [displayName, setDisplayName] = useState('')
-  const [intakeDate, setIntakeDate]   = useState(format(new Date(), 'yyyy-MM-dd'))
-  const [birthday, setBirthday]       = useState('')
-  const [error, setError]             = useState('')
+  const [initials, setInitials]               = useState('')
+  const [displayName, setDisplayName]         = useState('')
+  const [intakeDate, setIntakeDate]           = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [birthday, setBirthday]               = useState('')
+  const [startingBalance, setStartingBalance] = useState('')
+  const [error, setError]                     = useState('')
 
   function resetForm() {
     setInitials(''); setDisplayName('')
     setIntakeDate(format(new Date(), 'yyyy-MM-dd'))
-    setBirthday(''); setError('')
+    setBirthday(''); setStartingBalance(''); setError('')
   }
 
   useEffect(() => { loadKids() }, [saved])
@@ -87,20 +89,49 @@ export default function ManageKids() {
 
     const orientationEnd = addHours(new Date(intakeDate), 48).toISOString()
 
-    const { error: insertErr } = await supabase.from('kids').insert({
+    const { data: newKid, error: insertErr } = await supabase.from('kids').insert({
       initials: initials.toUpperCase(),
       display_name: displayName || initials.toUpperCase(),
       intake_date: intakeDate,
       orientation_end_at: orientationEnd,
       is_active: true,
       user_id: newUser.user?.id,
-    })
+    }).select('id').single()
 
     if (insertErr) { setError(insertErr.message); setSaving(false); return }
 
+    // Create opening balance logs if provided
+    const balance = parseInt(startingBalance) || 0
+    if (balance > 0 && newKid?.id) {
+      const today    = format(new Date(), 'yyyy-MM-dd')
+      const wStart   = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+      let remaining  = Math.min(balance, 700) // weekly max
+      let dayPtr     = new Date(today + 'T12:00:00')
+      const weekStart = new Date(wStart + 'T12:00:00')
+      const logs     = []
+
+      // Fill days from today backwards through this week
+      while (remaining > 0 && dayPtr >= weekStart) {
+        const pts = Math.min(100, remaining)
+        logs.push({
+          kid_id: newKid.id,
+          date: format(dayPtr, 'yyyy-MM-dd'),
+          total_pts: pts,
+          am_pts: 0, pm_pts: 0, ov_pts: 0,
+          minor_infractions: 0, major_infractions: 0,
+          level_achieved: getLevel(pts),
+          staff_notes: `Opening balance — transferred from paper system (${balance} pts)`,
+        })
+        remaining -= pts
+        dayPtr = subDays(dayPtr, 1)
+      }
+
+      await supabase.from('daily_logs').insert(logs)
+    }
+
     setSaving(false)
     setShowAdd(false)
-    setNewKidCreds({ initials: initials.toUpperCase(), password })
+    setNewKidCreds({ initials: initials.toUpperCase(), password, startingBalance: balance })
     resetForm()
     setSaved(v => !v)
   }
@@ -157,6 +188,11 @@ export default function ManageKids() {
             <div><span className="text-slate-500">Username:</span> <strong>{newKidCreds.initials}</strong></div>
             <div><span className="text-slate-500">Password:</span> <strong>{newKidCreds.password}</strong></div>
           </div>
+          {newKidCreds.startingBalance > 0 && (
+            <div className="text-sm text-emerald-700 bg-emerald-100 rounded-xl px-3 py-2">
+              ✅ {newKidCreds.startingBalance} opening points logged for this week.
+            </div>
+          )}
           <button onClick={() => setNewKidCreds(null)} className="text-xs text-slate-400 hover:underline">Dismiss</button>
         </div>
       )}
@@ -272,6 +308,30 @@ export default function ManageKids() {
               <label className="block text-xs font-semibold text-slate-500 mb-1.5">Intake Date</label>
               <input type="date" value={intakeDate} onChange={e => setIntakeDate(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                Starting Points Balance <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="700"
+                value={startingBalance}
+                onChange={e => setStartingBalance(e.target.value)}
+                placeholder="0"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              />
+              {startingBalance > 0 && (
+                <p className="text-xs text-amber-600 mt-1 font-medium">
+                  {startingBalance} pts will be logged as this week's entries so they can use them at canteen.
+                  {startingBalance > 700 && ' Max 700 pts (weekly limit).'}
+                </p>
+              )}
+              <p className="text-xs text-slate-400 mt-1">
+                Use this if the youth already has points from the paper system.
+              </p>
             </div>
 
             <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 text-xs text-blue-700">
