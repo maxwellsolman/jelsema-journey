@@ -188,14 +188,17 @@ export default function AdminDashboard() {
 
                   {/* Card footer: weekly balance + intake */}
                   <div className="px-4 pb-3 space-y-2">
-                    {/* Weekly balance bar */}
+                    {/* Weekly balance */}
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-400 flex items-center gap-1">
-                        <ShoppingBag size={10} /> Wk balance
+                        <ShoppingBag size={10} /> Canteen balance
                       </span>
                       <span className={`font-bold ${balance > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                        {balance} / {weekPts} pts
-                        {weekRedeemed > 0 && <span className="text-red-400 font-normal ml-1">(−{weekRedeemed} spent)</span>}
+                        {balance} pts
+                        {weekRedeemed > 0
+                          ? <span className="text-slate-400 font-normal ml-1">({weekPts} earned · −{weekRedeemed} spent)</span>
+                          : <span className="text-slate-400 font-normal ml-1">({weekPts} earned this wk)</span>
+                        }
                       </span>
                     </div>
 
