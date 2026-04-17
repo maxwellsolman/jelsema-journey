@@ -177,6 +177,28 @@
 }
 .count-up { animation: countUp 400ms ease-out forwards; }
 
+/* ── Confetti fall ────────────────────────────────────── */
+@keyframes confetti-fall {
+  0%   { transform: translateY(-40px) rotate(0deg);    opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(105vh) rotate(680deg);  opacity: 0; }
+}
+@keyframes confetti-sway {
+  0%, 100% { margin-left: 0px; }
+  33%       { margin-left: 18px; }
+  66%       { margin-left: -14px; }
+}
+.confetti-piece {
+  position: fixed;
+  top: -10px;
+  width: 10px;
+  height: 14px;
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 9999;
+  animation: confetti-fall linear forwards, confetti-sway ease-in-out infinite;
+}
+
 /* ── Reduced-motion overrides ─────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

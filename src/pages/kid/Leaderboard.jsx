@@ -6,10 +6,10 @@ import { getLevel, LEVELS } from '../../lib/levels'
 import { Zap, Trophy } from 'lucide-react'
 
 const DUO_LEVEL = {
-  [LEVELS.ORIENTATION]: { fill:'#94A3B8', bg:'#F1F5F9', text:'#64748B', emoji:'🌱' },
-  [LEVELS.REFOCUS]:     { fill:'#3B82F6', bg:'#EFF6FF', text:'#2563EB', emoji:'🔵' },
-  [LEVELS.RISING]:      { fill:'#F59E0B', bg:'#FFFBEB', text:'#D97706', emoji:'⭐' },
-  [LEVELS.ROLEMODEL]:   { fill:'#22C55E', bg:'#F0FDF4', text:'#16A34A', emoji:'🏆' },
+  [LEVELS.ORIENTATION]: { fill:'#94A3B8', bg:'#F1F5F9', text:'#64748B', emoji:'🌱', label:'Orientation' },
+  [LEVELS.REFOCUS]:     { fill:'#3B82F6', bg:'#EFF6FF', text:'#2563EB', emoji:'🔵', label:'Re-Focus'    },
+  [LEVELS.RISING]:      { fill:'#F59E0B', bg:'#FFFBEB', text:'#D97706', emoji:'⭐', label:'Rising Star'  },
+  [LEVELS.ROLEMODEL]:   { fill:'#22C55E', bg:'#F0FDF4', text:'#16A34A', emoji:'🏆', label:'Role Model'  },
 }
 
 const MEDAL_COLORS = [
@@ -173,7 +173,7 @@ export default function Leaderboard() {
                       </div>
                       <div className="rounded-full px-1.5 py-0.5 inline-block"
                         style={{ background: d.bg, color: d.text, fontFamily:'var(--font-display)', fontWeight:700, fontSize:10 }}>
-                        {d.emoji} {LEVELS[level] || level}
+                        {d.emoji} {d.label}
                       </div>
                     </div>
                   </div>

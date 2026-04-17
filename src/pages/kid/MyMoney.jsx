@@ -12,11 +12,12 @@ const TASKS = [
 
 export default function MyMoney() {
   const { profile } = useAuth()
-  const [earnings, setEarnings]       = useState([])
-  const [redemptions, setRedemptions] = useState([])
-  const [weekEarned, setWeekEarned]   = useState(0)
-  const [todayLevel, setTodayLevel]   = useState(null)
-  const [loading, setLoading]         = useState(true)
+  const [earnings, setEarnings]         = useState([])
+  const [redemptions, setRedemptions]   = useState([])
+  const [weekEarned, setWeekEarned]     = useState(0)
+  const [weekPtsBalance, setWeekPtsBalance] = useState(0)
+  const [todayLevel, setTodayLevel]     = useState(null)
+  const [loading, setLoading]           = useState(true)
   const today    = format(new Date(), 'yyyy-MM-dd')
   const isSunday = new Date().getDay() === 0
 
@@ -40,6 +41,15 @@ export default function MyMoney() {
       const { data: redeemData } = await supabase.from('canteen_redemptions')
         .select('*').eq('kid_id', profile.id).order('redeemed_at',{ascending:false}).limit(10)
       setRedemptions(redeemData || [])
+
+      // Weekly point balance for canteen
+      const { data: weekPtsData } = await supabase.from('daily_logs')
+        .select('total_pts').eq('kid_id', profile.id).gte('date', wStart).lte('date', wEnd)
+      const weekPtsTotal = (weekPtsData || []).reduce((s, l) => s + (l.total_pts || 0), 0)
+      const { data: weekRedeemData } = await supabase.from('canteen_redemptions')
+        .select('points_redeemed').eq('kid_id', profile.id).gte('redeemed_at', wStart)
+      const weekRedeemed = (weekRedeemData || []).reduce((s, r) => s + (r.points_redeemed || 0), 0)
+      setWeekPtsBalance(Math.max(0, weekPtsTotal - weekRedeemed))
 
       setLoading(false)
     }
@@ -84,11 +94,14 @@ export default function MyMoney() {
             <div style={{ fontSize:36 }}>{canteenOpen ? '🛍️' : '🏪'}</div>
             <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:30,
                           color: canteenOpen ? '#FF9600' : '#AFAFAF', lineHeight:1, marginTop:4 }}>
-              {Math.round(totalEarned * 10)}
+              {weekPtsBalance}
             </div>
             <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:11, textTransform:'uppercase', marginTop:2,
                           color: canteenOpen ? '#FF9600' : 'var(--duo-text-lt)' }}>
               {canteenOpen ? '🎉 Open Now!' : isRoleModel ? 'Opens Sunday' : 'Role Model Only'}
+            </div>
+            <div style={{ fontFamily:'var(--font-body)', fontSize:10, color:'#AFAFAF', marginTop:2 }}>
+              pts · resets Monday
             </div>
           </div>
         </div>
@@ -127,7 +140,7 @@ export default function MyMoney() {
               <div key={e.id}>
                 <div className="flex justify-between items-center mb-1.5">
                   <span style={{ fontFamily:'var(--font-display)', fontWeight:800, color:'var(--duo-text)', fontSize:14 }}>
-                    {format(new Date(e.date),'EEE, MMM d')}
+                    {format(new Date(e.date + 'T12:00:00'),'EEE, MMM d')}
                   </span>
                   <span style={{ fontFamily:'var(--font-display)', fontWeight:900, color:'#22C55E', fontSize:16 }}>
                     ${(e.total_earned||0).toFixed(2)}

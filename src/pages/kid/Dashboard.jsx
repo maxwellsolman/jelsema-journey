@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { getLevel, LEVEL_CONFIG, progressToNextLevel, LEVELS } from '../../lib/levels'
-import { isPrivilegeFrozen, freezeHoursRemaining } from '../../lib/points'
+import { isPrivilegeFrozen, freezeHoursRemaining, AM_BEHAVIORS, PM_BEHAVIORS, OVERNIGHT_BEHAVIORS } from '../../lib/points'
 import { format, subDays } from 'date-fns'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
-import { ShieldAlert, Zap, CheckCircle, XCircle } from 'lucide-react'
+import { ShieldAlert } from 'lucide-react'
 
-// Duolingo-style level config — bright, fun colors, no black
+// Duolingo-style level config
 const DUO_LEVEL = {
   [LEVELS.ORIENTATION]: { bg: '#F1F5F9', text: '#64748B', border: '#CBD5E1', fill: '#94A3B8', label: 'Orientation', emoji: '🌱', gradient: 'linear-gradient(135deg,#94A3B8,#64748B)' },
   [LEVELS.REFOCUS]:     { bg: '#EFF6FF', text: '#2563EB', border: '#93C5FD', fill: '#3B82F6', label: 'Re-Focus',    emoji: '🔵', gradient: 'linear-gradient(135deg,#60A5FA,#2563EB)' },
@@ -15,11 +15,47 @@ const DUO_LEVEL = {
   [LEVELS.ROLEMODEL]:   { bg: '#F0FDF4', text: '#16A34A', border: '#86EFAC', fill: '#22C55E', label: 'Role Model',  emoji: '🏆', gradient: 'linear-gradient(135deg,#4ADE80,#16A34A)' },
 }
 
-// Shift node colors (lesson-node style)
 const SHIFT_COLORS = {
   complete: { bg: '#58CC02', border: '#46A302', text: '#FFFFFF' },
   partial:  { bg: '#FF9600', border: '#CC7700', text: '#FFFFFF' },
   empty:    { bg: '#E5E5E5', border: '#AFAFAF', text: '#AFAFAF' },
+}
+
+const CONFETTI_COLORS = ['#58CC02','#FFD700','#FF9600','#FF4B4B','#1CB0F6','#CE82FF','#22C55E','#F59E0B']
+
+function ConfettiRain() {
+  const pieces = useMemo(() =>
+    Array.from({ length: 60 }, (_, i) => ({
+      id: i,
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      left: `${(i * 1.7) % 100}%`,
+      delay: `${(i * 0.07) % 2.5}s`,
+      duration: `${2.2 + (i % 5) * 0.35}s`,
+      width: 8 + (i % 4) * 3,
+      height: 10 + (i % 3) * 4,
+      swayDuration: `${1.2 + (i % 4) * 0.3}s`,
+    })), []
+  )
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 9999, overflow: 'hidden' }}>
+      {pieces.map(p => (
+        <div
+          key={p.id}
+          className="confetti-piece"
+          style={{
+            left: p.left,
+            backgroundColor: p.color,
+            width: p.width,
+            height: p.height,
+            animationDuration: `${p.duration}, ${p.swayDuration}`,
+            animationDelay: `${p.delay}, ${p.delay}`,
+            animationIterationCount: '1, infinite',
+          }}
+        />
+      ))}
+    </div>
+  )
 }
 
 function ShiftNode({ label, pts, max, icon }) {
@@ -58,14 +94,85 @@ function StatBubble({ icon, value, label, color, bg }) {
   )
 }
 
+function GamePlanCard({ todayLog, currentPts }) {
+  const allBehaviors = [
+    { shift: '☀️ Morning', behaviors: AM_BEHAVIORS, earned: todayLog.am_pts || 0, max: 40 },
+    { shift: '🌆 Afternoon', behaviors: PM_BEHAVIORS, earned: todayLog.pm_pts || 0, max: 50 },
+    { shift: '🌙 Night', behaviors: OVERNIGHT_BEHAVIORS, earned: todayLog.ov_pts || 0, max: 10 },
+  ]
+
+  const missedByShift = allBehaviors.map(s => ({
+    shift: s.shift,
+    missed: s.behaviors.filter(b => !todayLog[b.key]),
+    potential: s.behaviors.filter(b => !todayLog[b.key]).length * 5,
+  })).filter(s => s.missed.length > 0)
+
+  const totalMissed = missedByShift.reduce((s, sh) => s + sh.potential, 0)
+  const projectedScore = Math.min(100, currentPts + totalMissed)
+  const wouldReachRM = projectedScore >= 86
+
+  if (missedByShift.length === 0) return null
+
+  return (
+    <div className="fade-up duo-card p-4 space-y-3" style={{ borderColor: '#1CB0F666' }}>
+      <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:14, color:'#1CB0F6' }}>
+        🎯 Game Plan for Tomorrow
+      </div>
+
+      <div className="space-y-3">
+        {missedByShift.map(({ shift, missed, potential }) => (
+          <div key={shift}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:12, color:'var(--duo-text-lt)' }}>
+                {shift}
+              </span>
+              <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:12, color:'#FF9600' }}>
+                +{potential} pts available
+              </span>
+            </div>
+            <div className="space-y-1">
+              {missed.map(b => (
+                <div key={b.key} className="flex items-center gap-2 rounded-xl px-3 py-2"
+                  style={{ background:'#F7F7F7' }}>
+                  <div className="w-5 h-5 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center shrink-0">
+                    <div className="w-2 h-2 rounded-full bg-slate-300" />
+                  </div>
+                  <span style={{ fontFamily:'var(--font-body)', fontSize:13, color:'var(--duo-text)', flex:1 }}>
+                    {b.label}
+                  </span>
+                  <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:12, color:'#AFAFAF' }}>
+                    +5
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-2xl px-4 py-3 text-center"
+        style={{ background: wouldReachRM ? '#F0FDF4' : '#FFFBEB', border: `2px solid ${wouldReachRM ? '#86EFAC' : '#FCD34D'}` }}>
+        <span style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:14, color: wouldReachRM ? '#16A34A' : '#D97706' }}>
+          {wouldReachRM
+            ? `Get all of these → ${projectedScore} pts 🏆 Role Model!`
+            : `Get all of these → ${projectedScore} pts${projectedScore >= 66 ? ' ⭐ Rising Star!' : '!'}`
+          }
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export default function KidDashboard() {
   const { profile } = useAuth()
   const [todayLog, setTodayLog]   = useState(null)
   const [weekLogs, setWeekLogs]   = useState([])
   const [weekTotal, setWeekTotal] = useState(0)
   const [balance, setBalance]     = useState(0)
-  const [streak, setStreak]       = useState(0)
+  const [canteenBalance, setCanteenBalance] = useState(0)
   const [loading, setLoading]     = useState(true)
+  const [showConfetti, setShowConfetti] = useState(false)
+
   const today   = format(new Date(), 'yyyy-MM-dd')
   const isSunday = new Date().getDay() === 0
 
@@ -84,21 +191,33 @@ export default function KidDashboard() {
       setWeekLogs(logs)
       setWeekTotal(logs.reduce((s, l) => s + l.total_pts, 0))
 
-      let s = 0
-      for (const l of [...logs].reverse()) {
-        if (getLevel(l.total_pts) === LEVELS.ROLEMODEL) s++
-        else break
-      }
-      setStreak(s)
-
       const { data: earns } = await supabase.from('daily_earnings').select('total_earned')
         .eq('kid_id', profile.id).gte('date', since)
       setBalance((earns || []).reduce((s, e) => s + (e.total_earned || 0), 0))
+
+      const { data: redemptions } = await supabase.from('canteen_redemptions')
+        .select('points_redeemed').eq('kid_id', profile.id).gte('redeemed_at', since)
+      const spent = (redemptions || []).reduce((s, r) => s + (r.points_redeemed || 0), 0)
+      const weekPts = logs.reduce((s, l) => s + l.total_pts, 0)
+      setCanteenBalance(Math.max(0, weekPts - spent))
 
       setLoading(false)
     }
     load()
   }, [profile?.id, today])
+
+  // Fire confetti once per day when at Role Model
+  useEffect(() => {
+    if (!todayLog) return
+    const level = getLevel(todayLog.total_pts, isOrientation(profile))
+    if (level !== LEVELS.ROLEMODEL) return
+    const key = `confetti-${today}-${profile?.id}`
+    if (sessionStorage.getItem(key)) return
+    sessionStorage.setItem(key, '1')
+    setShowConfetti(true)
+    const t = setTimeout(() => setShowConfetti(false), 4000)
+    return () => clearTimeout(t)
+  }, [todayLog, today, profile?.id])
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-64 gap-4">
@@ -109,17 +228,36 @@ export default function KidDashboard() {
     </div>
   )
 
-  const pts     = todayLog?.total_pts ?? null
-  const level   = pts !== null ? getLevel(pts, isOrientation(profile)) : LEVELS.REFOCUS
-  const duo     = DUO_LEVEL[level]
+  const pts      = todayLog?.total_pts ?? null
+  const level    = pts !== null ? getLevel(pts, isOrientation(profile)) : LEVELS.REFOCUS
+  const duo      = DUO_LEVEL[level]
   const progress = pts !== null ? progressToNextLevel(pts) : null
   const frozen   = isPrivilegeFrozen(todayLog?.privilege_freeze_until)
   const freezeHrs = freezeHoursRemaining(todayLog?.privilege_freeze_until)
+  const inOrientation = isOrientation(profile)
 
   return (
     <div className="space-y-4 pb-2">
 
-      {/* ── Privilege freeze (hearts = broken) ── */}
+      {showConfetti && <ConfettiRain />}
+
+      {/* Orientation banner */}
+      {inOrientation && (
+        <div className="fade-up duo-card p-4 flex items-center gap-3"
+          style={{ borderColor:'#94A3B8', background:'#F1F5F9' }}>
+          <span style={{ fontSize:28, lineHeight:1 }}>🌱</span>
+          <div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:800, color:'#475569', fontSize:15 }}>
+              You're in Orientation!
+            </div>
+            <div style={{ fontFamily:'var(--font-body)', color:'#64748B', fontSize:13 }}>
+              First 48 hours — learn the program. Points start counting soon!
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Privilege freeze */}
       {frozen && (
         <div className="fade-up duo-card p-4 flex items-center gap-3"
           style={{ borderColor:'#FF4B4B', background:'#FFF5F5' }}>
@@ -133,15 +271,11 @@ export default function KidDashboard() {
         </div>
       )}
 
-      {/* ── Level hero card ── */}
+      {/* Level hero card */}
       <div className="bounce-in duo-card overflow-hidden"
         style={{ borderColor: duo.border, borderWidth:2.5 }}>
-
-        {/* Gradient top strip */}
         <div className="h-2 w-full" style={{ background: duo.gradient }} />
-
         <div className="p-5">
-          {/* Level badge row */}
           <div className="flex items-center justify-between mb-4">
             <div>
               <div style={{ fontFamily:'var(--font-display)', fontWeight:700, color:'var(--duo-text-lt)', fontSize:11, textTransform:'uppercase', letterSpacing:'0.08em' }}>
@@ -163,7 +297,6 @@ export default function KidDashboard() {
             </div>
           </div>
 
-          {/* Progress bar to next level */}
           {progress && pts !== null && (
             <div>
               <div className="flex justify-between mb-1.5"
@@ -193,27 +326,7 @@ export default function KidDashboard() {
         </div>
       </div>
 
-      {/* ── Streak banner ── */}
-      {streak > 0 && (
-        <div className="fade-up duo-card p-4 flex items-center gap-3"
-          style={{ borderColor:'#FF9600', background:'#FFFBF0' }}>
-          <div style={{ fontSize:42, lineHeight:1 }}>🔥</div>
-          <div>
-            <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:20, color:'#FF6B00' }}>
-              {streak}-day streak!
-            </div>
-            <div style={{ fontFamily:'var(--font-display)', fontWeight:600, color:'#FF9600', fontSize:13 }}>
-              Keep it up — you're on fire!
-            </div>
-          </div>
-          <div className="ml-auto text-right">
-            <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:28, color:'#FF6B00' }}>{streak}</div>
-            <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:10, color:'#FF9600', textTransform:'uppercase' }}>days</div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Shift nodes (lesson-style) ── */}
+      {/* Today's shifts */}
       {todayLog && (
         <div className="fade-up duo-card p-5">
           <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:13, color:'var(--duo-text-lt)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:16 }}>
@@ -233,20 +346,25 @@ export default function KidDashboard() {
         </div>
       )}
 
-      {/* ── Stats bubbles ── */}
+      {/* Game plan — only show when not Role Model and logged today */}
+      {todayLog && level !== LEVELS.ROLEMODEL && pts !== null && (
+        <GamePlanCard todayLog={todayLog} currentPts={pts} />
+      )}
+
+      {/* Stats bubbles */}
       <div className="fade-up grid grid-cols-3 gap-3">
         <StatBubble icon="⚡" value={weekTotal} label="This Week"  color="#2563EB" bg="#EFF6FF" />
         <StatBubble icon="💵" value={`$${balance.toFixed(2)}`} label="Allowance" color="#16A34A" bg="#F0FDF4" />
         <StatBubble
           icon={isSunday && level === LEVELS.ROLEMODEL ? '🛍️' : '🏪'}
-          value={weekTotal}
-          label={isSunday && level === LEVELS.ROLEMODEL ? 'Store!' : 'Canteen'}
+          value={canteenBalance}
+          label={isSunday && level === LEVELS.ROLEMODEL ? 'Store Open!' : 'Canteen Bal'}
           color={isSunday && level === LEVELS.ROLEMODEL ? '#D97706' : '#AFAFAF'}
           bg={isSunday && level === LEVELS.ROLEMODEL ? '#FFFBEB' : '#F7F7F7'}
         />
       </div>
 
-      {/* ── 7-day sparkline ── */}
+      {/* 7-day sparkline */}
       {weekLogs.length > 1 && (
         <div className="fade-up duo-card p-4">
           <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:12, color:'var(--duo-text-lt)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>
@@ -260,12 +378,12 @@ export default function KidDashboard() {
           </ResponsiveContainer>
           <div className="flex justify-between mt-1"
             style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:10, color:'var(--duo-text-lt)' }}>
-            {weekLogs.map(l => <span key={l.date}>{format(new Date(l.date),'EEE')}</span>)}
+            {weekLogs.map(l => <span key={l.date}>{format(new Date(l.date + 'T12:00:00'),'EEE')}</span>)}
           </div>
         </div>
       )}
 
-      {/* ── Level guide ── */}
+      {/* Level guide */}
       <div className="fade-up duo-card p-4 space-y-2">
         <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:12, color:'var(--duo-text-lt)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>
           Level Guide

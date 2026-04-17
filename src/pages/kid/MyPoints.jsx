@@ -46,10 +46,10 @@ function DayCard({ log }) {
           </div>
           <div className="text-left">
             <div style={{ fontFamily:'var(--font-display)', fontWeight:800, color:'var(--duo-text)', fontSize:15 }}>
-              {format(new Date(log.date), 'EEEE')}
+              {format(new Date(log.date + 'T12:00:00'), 'EEEE')}
             </div>
             <div style={{ fontFamily:'var(--font-body)', color:'var(--duo-text-lt)', fontSize:12 }}>
-              {format(new Date(log.date), 'MMM d, yyyy')}
+              {format(new Date(log.date + 'T12:00:00'), 'MMM d, yyyy')}
             </div>
             <div className="mt-0.5 rounded-full px-2 py-0.5 inline-block"
               style={{ background: d.bg, color: d.text, fontFamily:'var(--font-display)', fontWeight:800, fontSize:11 }}>
@@ -125,8 +125,17 @@ function DayCard({ log }) {
 export default function MyPoints() {
   const { profile } = useAuth()
   const [logs, setLogs]       = useState([])
+  const [allLogs, setAllLogs] = useState([])
   const [range, setRange]     = useState(14)
   const [loading, setLoading] = useState(true)
+
+  // Load all-time logs once for personal bests
+  useEffect(() => {
+    if (!profile?.id) return
+    supabase.from('daily_logs').select('total_pts, level_achieved, date')
+      .eq('kid_id', profile.id).order('date', { ascending: false })
+      .then(({ data }) => setAllLogs(data || []))
+  }, [profile?.id])
 
   useEffect(() => {
     if (!profile?.id) return
@@ -135,6 +144,10 @@ export default function MyPoints() {
     if (range !== 0) q = q.gte('date', format(subDays(new Date(), range), 'yyyy-MM-dd'))
     q.then(({ data }) => { setLogs(data || []); setLoading(false) })
   }, [profile?.id, range])
+
+  const bestDay    = allLogs.length ? Math.max(...allLogs.map(l => l.total_pts)) : null
+  const rmDaysEver = allLogs.filter(l => (l.level_achieved || getLevel(l.total_pts)) === LEVELS.ROLEMODEL).length
+  const totalDays  = allLogs.length
 
   const RANGES = [{ v:7,label:'7d'},{v:14,label:'14d'},{v:30,label:'30d'},{v:0,label:'All'}]
 
@@ -160,6 +173,50 @@ export default function MyPoints() {
           ))}
         </div>
       </div>
+
+      {/* Personal bests */}
+      {allLogs.length > 0 && (
+        <div className="duo-card p-4" style={{ borderColor:'#FFD70066', background:'#FFFDF0' }}>
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:12, color:'#CC8800', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:12 }}>
+            🏅 Personal Bests
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="rounded-2xl py-3 px-2" style={{ background:'#FFF4CC' }}>
+              <div style={{ fontSize:24 }}>🏆</div>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:26, color:'#CC8800', lineHeight:1, marginTop:4 }}>
+                {bestDay ?? '—'}
+              </div>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:10, color:'#AA7700', textTransform:'uppercase', marginTop:2 }}>
+                Best Day
+              </div>
+            </div>
+            <div className="rounded-2xl py-3 px-2" style={{ background:'#F0FDF4' }}>
+              <div style={{ fontSize:24 }}>🌟</div>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:26, color:'#16A34A', lineHeight:1, marginTop:4 }}>
+                {rmDaysEver}
+              </div>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:10, color:'#15803D', textTransform:'uppercase', marginTop:2 }}>
+                Role Model Days
+              </div>
+            </div>
+            <div className="rounded-2xl py-3 px-2" style={{ background:'#EFF6FF' }}>
+              <div style={{ fontSize:24 }}>📅</div>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:26, color:'#2563EB', lineHeight:1, marginTop:4 }}>
+                {totalDays}
+              </div>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:10, color:'#1D4ED8', textTransform:'uppercase', marginTop:2 }}>
+                Days Logged
+              </div>
+            </div>
+          </div>
+          {bestDay === 100 && (
+            <div className="mt-3 text-center rounded-2xl py-2"
+              style={{ background:'#FFF4CC', fontFamily:'var(--font-display)', fontWeight:800, fontSize:13, color:'#CC8800' }}>
+              🎉 You had a perfect 100-point day!
+            </div>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-10" style={{ color:'var(--duo-text-lt)', fontFamily:'var(--font-display)', fontWeight:700 }}>

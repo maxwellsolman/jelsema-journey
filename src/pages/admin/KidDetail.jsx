@@ -4,13 +4,113 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { format, subDays, startOfWeek, endOfWeek } from 'date-fns'
 import { getLevel, LEVEL_CONFIG } from '../../lib/levels'
-import { isPrivilegeFrozen, freezeHoursRemaining } from '../../lib/points'
+import { isPrivilegeFrozen, freezeHoursRemaining, AM_BEHAVIORS, PM_BEHAVIORS, OVERNIGHT_BEHAVIORS } from '../../lib/points'
 import LevelBadge from '../../components/ui/LevelBadge'
 import TrendChart from '../../components/charts/TrendChart'
 import {
   ArrowLeft, ShieldAlert, Star, DollarSign, TrendingUp,
-  Pin, PinOff, Send, Trash2, ClipboardList
+  Pin, PinOff, Send, Trash2, ClipboardList, ChevronDown, ChevronUp,
+  Pencil, ShoppingBag, AlertCircle
 } from 'lucide-react'
+
+function BehaviorRow({ label, earned }) {
+  return (
+    <div className={`flex items-center gap-2 text-xs py-0.5 ${earned ? 'text-emerald-700' : 'text-slate-400'}`}>
+      <div className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${earned ? 'bg-emerald-500' : 'bg-slate-200'}`}>
+        {earned
+          ? <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+          : <svg className="w-2.5 h-2.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        }
+      </div>
+      <span className={earned ? '' : 'line-through'}>{label}</span>
+    </div>
+  )
+}
+
+function HistoryRow({ log, kidId, navigate }) {
+  const [expanded, setExpanded] = useState(false)
+  const lv   = log.level_achieved || getLevel(log.total_pts)
+  const lcfg = LEVEL_CONFIG[lv]
+
+  return (
+    <div className="border-b border-slate-50 last:border-0">
+      {/* Summary row */}
+      <button
+        className="w-full px-5 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
+        onClick={() => setExpanded(v => !v)}
+      >
+        <div className="flex items-center gap-2">
+          <div className={`w-7 h-7 rounded-xl ${lcfg.badgeBg} flex items-center justify-center text-sm`}>{lcfg.emoji}</div>
+          <span className="font-semibold text-slate-700 text-sm">{format(new Date(log.date + 'T12:00:00'), 'EEE, MMM d')}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {(log.minor_infractions > 0 || log.major_infractions > 0) && (
+            <span className="text-xs text-red-500 font-semibold">
+              {log.minor_infractions > 0 && `⚠️${log.minor_infractions} `}
+              {log.major_infractions > 0 && `🚨${log.major_infractions}`}
+            </span>
+          )}
+          <span className={`text-xl font-black ${lcfg.textClass}`}>{log.total_pts}</span>
+          <LevelBadge level={lv} size="sm" />
+          {expanded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+        </div>
+      </button>
+
+      {/* Expanded detail */}
+      {expanded && (
+        <div className="px-5 pb-4 space-y-3 bg-slate-50/60">
+          {/* Shift breakdown */}
+          <div className="grid grid-cols-3 gap-2 pt-2">
+            {[
+              { label: '☀️ Morning', pts: log.am_pts || 0, max: 40 },
+              { label: '🌆 Afternoon', pts: log.pm_pts || 0, max: 50 },
+              { label: '🌙 Night', pts: log.ov_pts || 0, max: 10 },
+            ].map(s => (
+              <div key={s.label} className={`rounded-xl p-2.5 text-center ${s.pts === s.max ? 'bg-emerald-50 border border-emerald-100' : 'bg-white border border-slate-100'}`}>
+                <div className="text-xs text-slate-500 mb-0.5">{s.label}</div>
+                <div className={`text-base font-black ${s.pts === s.max ? 'text-emerald-600' : 'text-slate-700'}`}>
+                  {s.pts}<span className="text-xs font-normal text-slate-400">/{s.max}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Behavior detail */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Morning</div>
+              {AM_BEHAVIORS.map(b => <BehaviorRow key={b.key} label={b.label} earned={!!log[b.key]} />)}
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Afternoon</div>
+              {PM_BEHAVIORS.map(b => <BehaviorRow key={b.key} label={b.label} earned={!!log[b.key]} />)}
+            </div>
+            <div className="space-y-1">
+              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Overnight</div>
+              {OVERNIGHT_BEHAVIORS.map(b => <BehaviorRow key={b.key} label={b.label} earned={!!log[b.key]} />)}
+            </div>
+          </div>
+
+          {/* Notes */}
+          {log.positive_experiences && (
+            <div className="text-xs text-emerald-600 bg-emerald-50 rounded-lg px-3 py-1.5">✨ {log.positive_experiences}</div>
+          )}
+          {log.staff_notes && (
+            <div className="text-xs text-slate-500 bg-white border border-slate-100 rounded-lg px-3 py-1.5">📝 {log.staff_notes}</div>
+          )}
+
+          {/* Edit button */}
+          <button
+            onClick={() => navigate(`/admin/points?kid=${kidId}&date=${log.date}`)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            <Pencil size={12} /> Edit this entry
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function KidDetail() {
   const { kidId }  = useParams()
@@ -21,9 +121,11 @@ export default function KidDetail() {
   const [todayLog, setTodayLog]     = useState(null)
   const [recentLogs, setRecentLogs] = useState([])
   const [weekEarnings, setWeekEarnings] = useState([])
+  const [weekRedemptions, setWeekRedemptions] = useState([])
   const [notes, setNotes]           = useState([])
   const [newNote, setNewNote]       = useState('')
   const [postingNote, setPostingNote] = useState(false)
+  const [noteError, setNoteError]   = useState('')
   const [loading, setLoading]       = useState(true)
   const [tab, setTab]               = useState('overview') // overview | history | notes
 
@@ -37,33 +139,47 @@ export default function KidDetail() {
   }, [kidId])
 
   async function load() {
-    const [{ data: kidData }, { data: logToday }, { data: logs }, { data: earns }, { data: notesData }] = await Promise.all([
+    const [
+      { data: kidData },
+      { data: logToday },
+      { data: logs },
+      { data: earns },
+      { data: notesData },
+      { data: redemptions },
+    ] = await Promise.all([
       supabase.from('kids').select('*').eq('id', kidId).single(),
       supabase.from('daily_logs').select('*').eq('kid_id', kidId).eq('date', today).single(),
       supabase.from('daily_logs').select('*').eq('kid_id', kidId).gte('date', since30).order('date', { ascending: false }),
       supabase.from('daily_earnings').select('*').eq('kid_id', kidId).gte('date', wStart).lte('date', wEnd),
       supabase.from('kid_notes').select('*').eq('kid_id', kidId).order('pinned', { ascending: false }).order('created_at', { ascending: false }),
+      supabase.from('canteen_redemptions').select('*').eq('kid_id', kidId).gte('redeemed_at', wStart),
     ])
     setKid(kidData)
     setTodayLog(logToday || null)
     setRecentLogs(logs || [])
     setWeekEarnings(earns || [])
     setNotes(notesData || [])
+    setWeekRedemptions(redemptions || [])
     setLoading(false)
   }
 
   async function handlePostNote() {
     if (!newNote.trim()) return
     setPostingNote(true)
-    await supabase.from('kid_notes').insert({
+    setNoteError('')
+    const { error } = await supabase.from('kid_notes').insert({
       kid_id:     kidId,
       admin_name: profile?.name || 'Staff',
       body:       newNote.trim(),
       pinned:     false,
+      created_at: new Date().toISOString(),
     })
-    setNewNote('')
     setPostingNote(false)
-    // Reload notes
+    if (error) {
+      setNoteError('Failed to post note: ' + error.message)
+      return
+    }
+    setNewNote('')
     const { data } = await supabase.from('kid_notes').select('*').eq('kid_id', kidId)
       .order('pinned', { ascending: false }).order('created_at', { ascending: false })
     setNotes(data || [])
@@ -95,6 +211,8 @@ export default function KidDetail() {
   const freezeHrs = freezeHoursRemaining(todayLog?.privilege_freeze_until)
   const weekTotal = weekEarnings.reduce((s, e) => s + (e.total_earned || 0), 0)
   const weekPts   = recentLogs.filter(l => l.date >= wStart && l.date <= wEnd).reduce((s, l) => s + l.total_pts, 0)
+  const weekRedeemed = weekRedemptions.reduce((s, r) => s + (r.points_redeemed || 0), 0)
+  const weekBalance = Math.max(0, weekPts - weekRedeemed)
   const avg30     = recentLogs.length ? Math.round(recentLogs.reduce((s, l) => s + l.total_pts, 0) / recentLogs.length) : null
   const rmDays    = recentLogs.filter(l => l.level_achieved === 'rolemodel').length
   const pinnedNotes = notes.filter(n => n.pinned)
@@ -119,7 +237,7 @@ export default function KidDetail() {
               <div className="text-3xl font-black text-slate-800">{kid.initials}</div>
               {level && <div className="mt-0.5"><LevelBadge level={level} size="md" /></div>}
               <div className="text-xs text-slate-400 mt-1 space-x-2">
-                {kid.intake_date && <span>Intake: {format(new Date(kid.intake_date), 'MMM d, yyyy')}</span>}
+                {kid.intake_date && <span>Intake: {format(new Date(kid.intake_date + 'T12:00:00'), 'MMM d, yyyy')}</span>}
                 <span>·</span>
                 <span className={kid.is_active ? 'text-emerald-500 font-semibold' : 'text-slate-400'}>
                   {kid.is_active ? 'Active' : 'Discharged'}
@@ -169,9 +287,9 @@ export default function KidDetail() {
       {/* Quick stats */}
       <div className="grid grid-cols-4 gap-2">
         {[
-          { icon: <Star size={14} />, value: weekPts,          label: 'Wk Pts',  color: 'text-blue-600',   bg: 'bg-blue-50' },
-          { icon: <DollarSign size={14} />, value: `$${weekTotal.toFixed(0)}`, label: 'Earned', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { icon: <TrendingUp size={14} />, value: avg30 ?? '—', label: '30d Avg', color: 'text-amber-600',  bg: 'bg-amber-50' },
+          { icon: <Star size={14} />, value: weekPts, label: 'Wk Pts', color: 'text-blue-600', bg: 'bg-blue-50' },
+          { icon: <ShoppingBag size={14} />, value: weekBalance, label: 'Canteen Bal', color: weekBalance > 0 ? 'text-emerald-600' : 'text-slate-400', bg: 'bg-emerald-50' },
+          { icon: <TrendingUp size={14} />, value: avg30 ?? '—', label: '30d Avg', color: 'text-amber-600', bg: 'bg-amber-50' },
           { icon: <span className="text-xs">🏆</span>, value: rmDays, label: 'RM Days', color: 'text-emerald-700', bg: 'bg-emerald-50' },
         ].map((s, i) => (
           <div key={i} className={`${s.bg} rounded-2xl p-3 text-center border border-white`}>
@@ -181,6 +299,15 @@ export default function KidDetail() {
           </div>
         ))}
       </div>
+
+      {/* Weekly canteen balance detail */}
+      {weekRedeemed > 0 && (
+        <div className="bg-white rounded-xl border border-slate-100 px-4 py-3 text-xs text-slate-500 flex items-center justify-between">
+          <span>Weekly earned: <strong className="text-slate-700">{weekPts} pts</strong></span>
+          <span>Canteen spent: <strong className="text-red-500">−{weekRedeemed} pts</strong></span>
+          <span>Balance: <strong className="text-emerald-600">{weekBalance} pts</strong></span>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
@@ -202,7 +329,15 @@ export default function KidDetail() {
           {/* Today detail */}
           {todayLog && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
-              <h3 className="font-bold text-slate-600 text-xs uppercase tracking-wide">Today's Shifts</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-slate-600 text-xs uppercase tracking-wide">Today's Shifts</h3>
+                <button
+                  onClick={() => navigate(`/admin/points?kid=${kidId}&date=${today}`)}
+                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-emerald-600 transition-colors"
+                >
+                  <Pencil size={11} /> Edit
+                </button>
+              </div>
               <div className="grid grid-cols-3 gap-3 text-center">
                 {[
                   { label: '☀️ Morning',   pts: todayLog.am_pts || 0, max: 40 },
@@ -236,9 +371,9 @@ export default function KidDetail() {
 
           {/* Quick actions */}
           <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => navigate('/admin/points')}
+            <button onClick={() => navigate(`/admin/points?kid=${kidId}&date=${today}`)}
               className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl py-3 text-sm font-bold transition-colors shadow flex items-center justify-center gap-2">
-              <ClipboardList size={16} /> Enter Points
+              <ClipboardList size={16} /> Enter / Edit Points
             </button>
             <button onClick={() => navigate('/admin/reports')}
               className="bg-slate-700 hover:bg-slate-800 text-white rounded-2xl py-3 text-sm font-bold transition-colors shadow flex items-center justify-center gap-2">
@@ -251,40 +386,16 @@ export default function KidDetail() {
       {/* ── HISTORY TAB ── */}
       {tab === 'history' && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-50 bg-slate-50/60">
+            <p className="text-xs text-slate-400">Tap any row to see the full behavior breakdown · use Edit to correct entries</p>
+          </div>
           {recentLogs.length === 0 ? (
             <div className="p-10 text-center text-slate-400 text-sm">No logs in the last 30 days.</div>
           ) : (
-            <div className="divide-y divide-slate-50">
-              {recentLogs.map(l => {
-                const lv   = l.level_achieved || getLevel(l.total_pts)
-                const lcfg = LEVEL_CONFIG[lv]
-                return (
-                  <div key={l.id} className="px-5 py-3 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-7 h-7 rounded-xl ${lcfg.badgeBg} flex items-center justify-center text-sm`}>{lcfg.emoji}</div>
-                        <span className="font-semibold text-slate-700 text-sm">{format(new Date(l.date), 'EEE, MMM d')}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {(l.minor_infractions > 0 || l.major_infractions > 0) && (
-                          <span className="text-xs text-red-500 font-semibold">
-                            {l.minor_infractions > 0 && `⚠️${l.minor_infractions} `}
-                            {l.major_infractions > 0 && `🚨${l.major_infractions}`}
-                          </span>
-                        )}
-                        <span className={`text-xl font-black ${lcfg.textClass}`}>{l.total_pts}</span>
-                        <LevelBadge level={lv} size="sm" />
-                      </div>
-                    </div>
-                    {l.positive_experiences && (
-                      <div className="text-xs text-emerald-600 bg-emerald-50 rounded-lg px-2 py-1">✨ {l.positive_experiences}</div>
-                    )}
-                    {l.staff_notes && (
-                      <div className="text-xs text-slate-500 bg-slate-50 rounded-lg px-2 py-1">📝 {l.staff_notes}</div>
-                    )}
-                  </div>
-                )
-              })}
+            <div>
+              {recentLogs.map(l => (
+                <HistoryRow key={l.id} log={l} kidId={kidId} navigate={navigate} />
+              ))}
             </div>
           )}
         </div>
@@ -304,6 +415,11 @@ export default function KidDetail() {
               rows={3}
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
+            {noteError && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-600">
+                <AlertCircle size={12} /> {noteError}
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400">Cmd+Enter to post</span>
               <button

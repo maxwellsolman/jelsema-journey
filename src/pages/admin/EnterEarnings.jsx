@@ -35,6 +35,7 @@ export default function EnterEarnings() {
   const [checks, setChecks]   = useState({ reading_log: false, planner: false, mindfulness: false })
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [existing, setExisting] = useState(null)
 
   useEffect(() => {
@@ -61,15 +62,25 @@ export default function EnterEarnings() {
   async function handleSave() {
     if (!selectedKid) return
     setSaving(true)
+    setSaveError('')
     const payload = { kid_id: selectedKid, date, ...checks, total_earned: total }
+    let err
     if (existing) {
-      await supabase.from('daily_earnings').update(payload).eq('id', existing.id)
+      const res = await supabase.from('daily_earnings').update(payload).eq('id', existing.id)
+      err = res.error
     } else {
-      await supabase.from('daily_earnings').insert(payload)
+      const res = await supabase.from('daily_earnings').insert(payload)
+      err = res.error
     }
     setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    if (err) {
+      setSaveError(err.message)
+    } else {
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+      const { data } = await supabase.from('daily_earnings').select('*').eq('kid_id', selectedKid).eq('date', date).single()
+      setExisting(data || null)
+    }
   }
 
   return (
@@ -112,10 +123,16 @@ export default function EnterEarnings() {
             ))}
           </div>
 
+          {saveError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+              ⚠️ Save failed: {saveError}
+            </div>
+          )}
+
           <button onClick={handleSave} disabled={saving}
             className={`w-full py-4 rounded-2xl font-bold text-white text-base transition-all shadow-lg flex items-center justify-center gap-2
               ${saved ? 'bg-emerald-500' : 'bg-slate-800 hover:bg-slate-700'} disabled:opacity-60`}>
-            {saved ? <><CheckCircle2 size={20} /> Saved!</> : saving ? 'Saving…' : <><Save size={18} /> Save Earnings</>}
+            {saved ? <><CheckCircle2 size={20} /> Saved!</> : saving ? 'Saving…' : <><Save size={18} /> {existing ? 'Update Earnings' : 'Save Earnings'}</>}
           </button>
           {existing && <p className="text-xs text-center text-slate-400">Editing existing entry for this date</p>}
         </>

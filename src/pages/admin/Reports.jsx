@@ -45,7 +45,9 @@ export default function Reports() {
     query.then(({ data }) => { setLogs(data || []); setLoading(false) })
   }, [selectedKid, range])
 
-  // Load all-kids summary when that tab is active
+  const [allRefreshKey, setAllRefreshKey] = useState(0)
+
+  // Load all-kids summary when that tab is active (or manually refreshed)
   useEffect(() => {
     if (tab !== 'everyone') return
     setAllLoading(true)
@@ -64,7 +66,7 @@ export default function Reports() {
       setAllKidsData(summary)
       setAllLoading(false)
     })
-  }, [tab])
+  }, [tab, allRefreshKey])
 
   const kid = kids.find(k => k.id === selectedKid)
   const avg = logs.length ? Math.round(logs.reduce((s, l) => s + l.total_pts, 0) / logs.length) : 0
@@ -90,7 +92,13 @@ export default function Reports() {
       {/* ── ALL KIDS TAB ── */}
       {tab === 'everyone' && (
         <div className="space-y-3">
-          <p className="text-sm text-slate-500">30-day summary for all active youth, ranked by average daily points.</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500">30-day summary for all active youth, ranked by average daily points.</p>
+            <button onClick={() => setAllRefreshKey(k => k + 1)}
+              className="text-xs font-semibold text-slate-400 hover:text-emerald-600 transition-colors px-3 py-1.5 rounded-lg border border-slate-200 hover:border-emerald-200">
+              ↻ Refresh
+            </button>
+          </div>
           {allLoading ? (
             <div className="text-slate-400 text-sm">Loading…</div>
           ) : allKidsData.length === 0 ? (
@@ -217,7 +225,7 @@ export default function Reports() {
                   <tbody>
                     {[...logs].reverse().map(l => (
                       <tr key={l.date} className="border-b border-slate-50 hover:bg-slate-50">
-                        <td className="px-5 py-2.5 text-slate-600">{format(new Date(l.date), 'EEE, MMM d')}</td>
+                        <td className="px-5 py-2.5 text-slate-600">{format(new Date(l.date + 'T12:00:00'), 'EEE, MMM d')}</td>
                         <td className="px-4 py-2.5 text-center text-slate-500">{l.am_pts ?? '—'}</td>
                         <td className="px-4 py-2.5 text-center text-slate-500">{l.pm_pts ?? '—'}</td>
                         <td className="px-4 py-2.5 text-center text-slate-500">{l.ov_pts ?? '—'}</td>

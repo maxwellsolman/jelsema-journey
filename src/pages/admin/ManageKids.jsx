@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { format, addHours } from 'date-fns'
-import { UserPlus, UserX, X, Copy, CheckCircle2 } from 'lucide-react'
+import { UserPlus, UserX, X, Copy, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
 
 function Modal({ title, onClose, children }) {
   return (
@@ -17,12 +17,10 @@ function Modal({ title, onClose, children }) {
   )
 }
 
-// Convert initials to the fake email used for Supabase auth
 function toKidEmail(initials) {
   return `${initials.trim().toLowerCase()}@jelsema.app`
 }
 
-// Convert birthday date string (yyyy-MM-dd) to MMDDYYYY password format
 function birthdayToPassword(dateStr) {
   if (!dateStr) return ''
   const [year, month, day] = dateStr.split('-')
@@ -34,9 +32,11 @@ export default function ManageKids() {
   const [showAdd, setShowAdd] = useState(false)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
-  const [newKidCreds, setNewKidCreds] = useState(null) // show login info after creation
+  const [newKidCreds, setNewKidCreds] = useState(null)
+  const [showDischarged, setShowDischarged] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(null) // kid to confirm delete
+  const [deleteTyped, setDeleteTyped]     = useState('')
 
-  // Form state
   const [initials, setInitials]       = useState('')
   const [displayName, setDisplayName] = useState('')
   const [intakeDate, setIntakeDate]   = useState(format(new Date(), 'yyyy-MM-dd'))
@@ -64,7 +64,6 @@ export default function ManageKids() {
     const email    = toKidEmail(initials)
     const password = birthdayToPassword(birthday)
 
-    // Save admin session BEFORE signUp — signUp auto-signs in the new user
     const { data: { session: adminSession } } = await supabase.auth.getSession()
 
     const { data: newUser, error: signUpErr } = await supabase.auth.signUp({
@@ -79,18 +78,12 @@ export default function ManageKids() {
       return
     }
 
-    // Immediately restore admin session so the kids INSERT passes RLS
     if (adminSession) {
       await supabase.auth.setSession({
         access_token:  adminSession.access_token,
         refresh_token: adminSession.refresh_token,
       })
     }
-
-    // Confirm user immediately (no email verification for kids)
-    // This is handled by the SQL we already ran: email_confirmed_at
-    // For new users, we do it via a quick update if possible, or it auto-confirms
-    // in the Supabase dashboard since email confirmation is disabled
 
     const orientationEnd = addHours(new Date(intakeDate), 48).toISOString()
 
@@ -112,14 +105,27 @@ export default function ManageKids() {
     setSaved(v => !v)
   }
 
-  async function handleDeactivate(kid) {
-    if (!confirm(`Discharge ${kid.initials}? Their history is preserved. You can reactivate any time.`)) return
+  async function handleDischarge(kid) {
+    if (!confirm(`Discharge ${kid.initials}? They'll be hidden from the dashboard but their history is preserved.`)) return
     await supabase.from('kids').update({ is_active: false }).eq('id', kid.id)
     setSaved(v => !v)
   }
 
   async function handleReactivate(kid) {
     await supabase.from('kids').update({ is_active: true }).eq('id', kid.id)
+    setSaved(v => !v)
+  }
+
+  async function handleDelete(kid) {
+    // Cascade delete all records for this kid
+    await Promise.all([
+      supabase.from('kid_notes').delete().eq('kid_id', kid.id),
+      supabase.from('daily_logs').delete().eq('kid_id', kid.id),
+      supabase.from('canteen_redemptions').delete().eq('kid_id', kid.id),
+      supabase.from('daily_earnings').delete().eq('kid_id', kid.id),
+    ])
+    await supabase.from('kids').delete().eq('id', kid.id)
+    setDeleteConfirm(null)
     setSaved(v => !v)
   }
 
@@ -172,38 +178,64 @@ export default function ManageKids() {
                 <div className="font-bold text-slate-800">{kid.initials}</div>
                 <div className="text-xs text-slate-400 space-x-2">
                   <span>Login: <strong className="text-slate-600">{kid.initials}</strong></span>
-                  {kid.intake_date && <span>· Intake: {format(new Date(kid.intake_date), 'MMM d, yyyy')}</span>}
+                  {kid.intake_date && <span>· Intake: {format(new Date(kid.intake_date + 'T12:00:00'), 'MMM d, yyyy')}</span>}
                   {kid.orientation_end_at && new Date(kid.orientation_end_at) > new Date() && (
                     <span className="bg-slate-100 px-1.5 py-0.5 rounded">Orientation</span>
                   )}
                 </div>
               </div>
             </div>
-            <button onClick={() => handleDeactivate(kid)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors text-xs font-semibold border border-transparent hover:border-red-100">
-              <UserX size={14} />
-              Discharge
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => handleDischarge(kid)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-slate-400 hover:text-orange-500 hover:bg-orange-50 transition-colors text-xs font-semibold border border-transparent hover:border-orange-100">
+                <UserX size={14} />
+                Discharge
+              </button>
+              <button
+                onClick={() => { setDeleteConfirm(kid); setDeleteTyped('') }}
+                title="Delete youth and all their data"
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors border border-transparent hover:border-red-100"
+              >
+                <X size={16} />
+              </button>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Inactive kids */}
+      {/* Discharged section (collapsible) */}
       {inactive.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-2">Discharged Alumni</h2>
-          <div className="space-y-2">
-            {inactive.map(kid => (
-              <div key={kid.id} className="bg-slate-50 rounded-xl border border-slate-100 px-5 py-3 flex items-center justify-between">
-                <div>
-                  <span className="font-medium text-slate-500">{kid.initials}</span>
-                  {kid.intake_date && <span className="text-xs text-slate-400 ml-2">Intake: {format(new Date(kid.intake_date), 'MMM d, yyyy')}</span>}
+          <button
+            onClick={() => setShowDischarged(v => !v)}
+            className="flex items-center gap-2 text-sm font-semibold text-slate-400 hover:text-slate-600 transition-colors mb-2"
+          >
+            {showDischarged ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            Discharged Alumni ({inactive.length})
+          </button>
+          {showDischarged && (
+            <div className="space-y-2">
+              {inactive.map(kid => (
+                <div key={kid.id} className="bg-slate-50 rounded-xl border border-slate-100 px-5 py-3 flex items-center justify-between">
+                  <div>
+                    <span className="font-medium text-slate-500">{kid.initials}</span>
+                    {kid.intake_date && <span className="text-xs text-slate-400 ml-2">Intake: {format(new Date(kid.intake_date + 'T12:00:00'), 'MMM d, yyyy')}</span>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleReactivate(kid)}
+                      className="text-xs text-emerald-600 hover:underline font-semibold">Reactivate</button>
+                    <button
+                      onClick={() => { setDeleteConfirm(kid); setDeleteTyped('') }}
+                      title="Delete all data"
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
                 </div>
-                <button onClick={() => handleReactivate(kid)}
-                  className="text-xs text-emerald-600 hover:underline font-semibold">Reactivate</button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -252,6 +284,42 @@ export default function ManageKids() {
               className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm transition-colors disabled:opacity-50">
               {saving ? 'Creating account…' : 'Add Youth'}
             </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete confirm modal */}
+      {deleteConfirm && (
+        <Modal title="Delete Youth" onClose={() => setDeleteConfirm(null)}>
+          <div className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 space-y-1">
+              <p className="font-bold">⚠️ This cannot be undone.</p>
+              <p>Deleting <strong>{deleteConfirm.initials}</strong> will permanently remove all of their daily logs, notes, canteen history, and earnings records.</p>
+            </div>
+            <p className="text-sm text-slate-600">To just hide them from the dashboard while keeping history, use <strong>Discharge</strong> instead.</p>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                Type <strong>{deleteConfirm.initials}</strong> to confirm
+              </label>
+              <input
+                value={deleteTyped}
+                onChange={e => setDeleteTyped(e.target.value.toUpperCase())}
+                placeholder={deleteConfirm.initials}
+                className="w-full px-3 py-2.5 rounded-xl border border-red-200 text-sm font-bold tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-red-400"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteConfirm(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(deleteConfirm)}
+                disabled={deleteTyped !== deleteConfirm.initials}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                Delete All Data
+              </button>
+            </div>
           </div>
         </Modal>
       )}

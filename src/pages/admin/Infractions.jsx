@@ -42,7 +42,7 @@ export default function Infractions() {
 
     const deduction   = type === 'minor' ? MINOR_DEDUCTION : MAJOR_DEDUCTION
     const freezeHours = type === 'minor' ? 24 : 48
-    const freeze = new Date()
+    const freeze = new Date(date + 'T12:00:00')
     freeze.setHours(freeze.getHours() + freezeHours)
 
     if (existing) {
@@ -60,7 +60,8 @@ export default function Infractions() {
         kid_id: selectedKid, date,
         minor_infractions:    type === 'minor' ? 1 : 0,
         major_infractions:    type === 'major' ? 1 : 0,
-        total_pts:            Math.max(0, 100 - deduction),
+        total_pts:            0,
+        am_pts: 0, pm_pts: 0, ov_pts: 0,
         privilege_freeze_until: freeze.toISOString(),
       })
     }
@@ -150,7 +151,7 @@ export default function Infractions() {
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="font-bold text-slate-800">{log.kids?.initials}</span>
-                    <span className="text-slate-400 text-sm ml-2">{format(new Date(log.date), 'MMM d, yyyy')}</span>
+                    <span className="text-slate-400 text-sm ml-2">{format(new Date(log.date + 'T12:00:00'), 'MMM d, yyyy')}</span>
                   </div>
                   <span className="text-xs text-slate-400">{log.total_pts} pts after deductions</span>
                 </div>

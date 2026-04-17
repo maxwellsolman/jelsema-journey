@@ -16,6 +16,7 @@ import ICanTeen       from './pages/admin/iCanTeen'
 import Reports        from './pages/admin/Reports'
 import ManageKids     from './pages/admin/ManageKids'
 import KidDetail      from './pages/admin/KidDetail'
+import HowItWorks    from './pages/admin/HowItWorks'
 
 import KidDashboard from './pages/kid/Dashboard'
 import MyPoints     from './pages/kid/MyPoints'
@@ -71,6 +72,7 @@ function AppRoutes() {
         <Route path="reports"   element={<Reports />} />
         <Route path="kids"      element={<ManageKids />} />
         <Route path="kid/:kidId" element={<KidDetail />} />
+        <Route path="howto"     element={<HowItWorks />} />
       </Route>
 
       {/* Kid routes */}
