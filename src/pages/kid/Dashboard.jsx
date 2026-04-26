@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { getLevel, LEVEL_CONFIG, progressToNextLevel, LEVELS } from '../../lib/levels'
 import { isPrivilegeFrozen, freezeHoursRemaining, AM_BEHAVIORS, PM_BEHAVIORS, OVERNIGHT_BEHAVIORS } from '../../lib/points'
-import { format, startOfWeek, endOfWeek, addDays } from 'date-fns'
+import { format, startOfWeek, endOfWeek, addDays, subDays } from 'date-fns'
 import { LineChart, Line, ResponsiveContainer } from 'recharts'
 import { ShieldAlert } from 'lucide-react'
 
@@ -228,6 +228,7 @@ function GamePlanCard({ todayLog, currentPts }) {
 export default function KidDashboard() {
   const { profile } = useAuth()
   const [todayLog, setTodayLog]           = useState(null)
+  const [yesterdayLog, setYesterdayLog]   = useState(null)
   const [weekLogs, setWeekLogs]           = useState([])
   const [weekTotal, setWeekTotal]         = useState(0)
   const [balance, setBalance]             = useState(0)
@@ -235,9 +236,10 @@ export default function KidDashboard() {
   const [loading, setLoading]             = useState(true)
   const [showConfetti, setShowConfetti]   = useState(false)
 
-  const today    = format(new Date(), 'yyyy-MM-dd')
-  const wStart   = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-  const wEnd     = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const today     = format(new Date(), 'yyyy-MM-dd')
+  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd')
+  const wStart    = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const wEnd      = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const isSunday = new Date().getDay() === 0
 
   useEffect(() => {
@@ -246,6 +248,10 @@ export default function KidDashboard() {
       const { data: log } = await supabase.from('daily_logs').select('*')
         .eq('kid_id', profile.id).eq('date', today).single()
       setTodayLog(log || null)
+
+      const { data: yLog } = await supabase.from('daily_logs').select('*')
+        .eq('kid_id', profile.id).eq('date', yesterday).single()
+      setYesterdayLog(yLog || null)
 
       const { data: wl } = await supabase.from('daily_logs')
         .select('date, total_pts, level_achieved').eq('kid_id', profile.id)
@@ -362,10 +368,13 @@ export default function KidDashboard() {
               <div className="text-right">
                 <div className="pop-in" style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:52,
                                                  color:duo.fill, lineHeight:1, '--delay':'200ms' }}>
-                  {pts ?? '—'}
+                  {pts !== null ? pts : (yesterdayLog?.total_pts ?? '—')}
                 </div>
                 <div style={{ fontFamily:'var(--font-display)', fontWeight:700, color:'var(--duo-text-lt)', fontSize:12 }}>
-                  pts today
+                  {pts !== null ? 'pts today' : yesterdayLog ? 'pts yesterday' : 'pts today'}
+                </div>
+                <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:13, color:'#2563EB', marginTop:4 }}>
+                  {weekTotal} pts this week
                 </div>
               </div>
             </div>
@@ -391,9 +400,9 @@ export default function KidDashboard() {
               </div>
             )}
             {pts === null && (
-              <div className="mt-2 rounded-2xl py-2.5 text-center"
+              <div className="mt-2 rounded-2xl py-2.5 px-3 text-center"
                 style={{ background:'#F7F7F7', color:'var(--duo-text-lt)', fontFamily:'var(--font-display)', fontWeight:700, fontSize:13 }}>
-                Points not logged yet today
+                {yesterdayLog ? "Showing yesterday's score — today's not logged yet" : "Points not logged yet today"}
               </div>
             )}
           </div>
@@ -402,26 +411,38 @@ export default function KidDashboard() {
         {/* ── Week strip ── */}
         <WeekStrip weekLogs={weekLogs} wStart={wStart} today={today} />
 
-        {/* ── Today's shifts ── */}
-        {todayLog && (
-          <div className="slide-up duo-card p-5" style={{ '--delay':'260ms' }}>
-            <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:13, color:'var(--duo-text-lt)',
-                          textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:16 }}>
-              Today's Shifts
-            </div>
-            <div className="flex justify-around">
-              <ShiftNode label="Morning"   pts={todayLog.am_pts||0} max={40} icon="☀️" delay="280ms" />
-              <ShiftNode label="Afternoon" pts={todayLog.pm_pts||0} max={50} icon="🌆" delay="340ms" />
-              <ShiftNode label="Night"     pts={todayLog.ov_pts||0} max={10} icon="🌙" delay="400ms" />
-            </div>
-            {todayLog.positive_experiences && (
-              <div className="mt-4 rounded-2xl px-3 py-2.5 text-sm"
-                style={{ background:'#F0FDF4', color:'#16A34A', fontFamily:'var(--font-display)', fontWeight:700 }}>
-                ✨ {todayLog.positive_experiences}
+        {/* ── Shifts (today or yesterday fallback) ── */}
+        {(todayLog || yesterdayLog) && (() => {
+          const shiftLog = todayLog || yesterdayLog
+          const isYesterday = !todayLog && !!yesterdayLog
+          return (
+            <div className="slide-up duo-card p-5" style={{ '--delay':'260ms' }}>
+              <div className="flex items-center justify-between mb-4">
+                <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:13, color:'var(--duo-text-lt)',
+                              textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                  {isYesterday ? "Yesterday's Shifts" : "Today's Shifts"}
+                </div>
+                {isYesterday && (
+                  <div className="rounded-full px-2.5 py-1 text-xs font-bold"
+                    style={{ background:'#FEF3C7', color:'#D97706', fontFamily:'var(--font-display)' }}>
+                    Today pending
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        )}
+              <div className="flex justify-around">
+                <ShiftNode label="Morning"   pts={shiftLog.am_pts||0} max={40} icon="☀️" delay="280ms" />
+                <ShiftNode label="Afternoon" pts={shiftLog.pm_pts||0} max={50} icon="🌆" delay="340ms" />
+                <ShiftNode label="Night"     pts={shiftLog.ov_pts||0} max={10} icon="🌙" delay="400ms" />
+              </div>
+              {shiftLog.positive_experiences && (
+                <div className="mt-4 rounded-2xl px-3 py-2.5 text-sm"
+                  style={{ background:'#F0FDF4', color:'#16A34A', fontFamily:'var(--font-display)', fontWeight:700 }}>
+                  ✨ {shiftLog.positive_experiences}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* ── Game plan ── */}
         {todayLog && level !== LEVELS.ROLEMODEL && pts !== null && (
@@ -430,7 +451,7 @@ export default function KidDashboard() {
 
         {/* ── Stats bubbles ── */}
         <div className="grid grid-cols-3 gap-3">
-          <StatBubble icon="⚡" value={weekTotal}              label="This Week"  color="#2563EB" bg="#EFF6FF" delay="300ms" />
+          <StatBubble icon="⚡" value={weekTotal}              label="Pts This Week"  color="#2563EB" bg="#EFF6FF" delay="300ms" />
           <StatBubble icon="💵" value={`$${balance.toFixed(2)}`} label="Allowance" color="#16A34A" bg="#F0FDF4" delay="360ms" />
           <StatBubble
             icon={isSunday && isRoleModel ? '🛍️' : '🏪'}
