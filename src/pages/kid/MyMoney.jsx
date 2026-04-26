@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { format, startOfWeek, endOfWeek, addDays } from 'date-fns'
 import { getLevel, LEVELS } from '../../lib/levels'
 import { X, ShoppingBag, Plus } from 'lucide-react'
+import { syncWallet } from '../../lib/sheets'
 
 const TASKS = [
   { key: 'reading_log', label: 'Reading Log',  emoji: '📚', color:'#1CB0F6', bg:'#F0F9FF' },
@@ -237,6 +238,7 @@ export default function MyMoney() {
       created_by: profile.user_id,
     })
     if (!error) {
+      syncWallet({ kid_id: profile.id, amount, description, date: purchaseDate })
       setTotalSpent(s => s + amount)
       setTransactions(prev => [
         { id: Date.now(), amount, description, date: purchaseDate, created_at: new Date().toISOString() },

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { format } from 'date-fns'
 import { CheckCircle2, Save } from 'lucide-react'
+import { syncEarn } from '../../lib/sheets'
 
 const TASKS = [
   { key: 'reading_log', label: 'Reading Log Completed', emoji: '📚', value: 1 },
@@ -76,6 +77,7 @@ export default function EnterEarnings() {
     if (err) {
       setSaveError(err.message)
     } else {
+      syncEarn({ ...payload, id: existing?.id })
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
       const { data } = await supabase.from('daily_earnings').select('*').eq('kid_id', selectedKid).eq('date', date).single()

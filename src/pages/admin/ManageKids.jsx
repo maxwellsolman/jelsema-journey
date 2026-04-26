@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { format, addHours, startOfWeek, subDays } from 'date-fns'
 import { UserPlus, UserX, X, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
 import { getLevel } from '../../lib/levels'
+import { syncKid } from '../../lib/sheets'
 
 function Modal({ title, onClose, children }) {
   return (
@@ -135,6 +136,7 @@ export default function ManageKids() {
 
     setSaving(false)
     setShowAdd(false)
+    syncKid({ id: newKid?.id, initials: initials.toUpperCase(), display_name: displayName || initials.toUpperCase(), intake_date: intakeDate, is_active: true })
     setNewKidCreds({ initials: initials.toUpperCase(), password, startingBalance: balance })
     resetForm()
     setSaved(v => !v)

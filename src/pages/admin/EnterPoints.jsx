@@ -10,6 +10,7 @@ import { getLevel, LEVEL_CONFIG } from '../../lib/levels'
 import { format, addDays, subDays } from 'date-fns'
 import { ChevronDown, ChevronUp, Save, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { syncLog } from '../../lib/sheets'
 
 const TODAY = format(new Date(), 'yyyy-MM-dd')
 
@@ -214,6 +215,8 @@ export default function EnterPoints() {
       setSaveError(err.message)
       return
     }
+
+    syncLog({ ...payload, id: existing?.id })
 
     // Update logged status panel
     setLoggedKids(prev => ({ ...prev, [selectedKid]: total }))
