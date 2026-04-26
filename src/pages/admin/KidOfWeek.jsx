@@ -46,6 +46,16 @@ function WinnerCard({ kid, total, rank, period }) {
   )
 }
 
+const MONTH_OPTIONS = (() => {
+  const opts = []
+  const now = new Date()
+  for (let i = -11; i <= 2; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
+    opts.push(format(d, 'MMMM yyyy'))
+  }
+  return opts.reverse()
+})()
+
 function KidOfMonthSetter({ kids }) {
   const [selectedKid, setSelectedKid] = useState('')
   const [monthLabel, setMonthLabel]   = useState(format(new Date(), 'MMMM yyyy'))
@@ -87,7 +97,7 @@ function KidOfMonthSetter({ kids }) {
           <div className="font-bold text-amber-900 text-base flex items-center gap-2">
             🏆 Kid of the Month
           </div>
-          <div className="text-xs text-amber-700 mt-0.5">Voted by staff — not auto-calculated</div>
+          <div className="text-xs text-amber-700 mt-0.5">Staff vote — set manually, not calculated from points</div>
         </div>
         {current && (
           <div className="text-right">
@@ -114,12 +124,15 @@ function KidOfMonthSetter({ kids }) {
         </div>
         <div>
           <label className="block text-xs font-semibold text-amber-800 mb-1.5">Month</label>
-          <input
+          <select
             value={monthLabel}
             onChange={e => setMonthLabel(e.target.value)}
-            placeholder="e.g. April 2026"
             className="w-full px-3 py-2.5 rounded-xl border border-amber-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
-          />
+          >
+            {MONTH_OPTIONS.map(m => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -220,7 +233,7 @@ export default function KidOfWeek() {
     <div className="p-6 space-y-6 max-w-2xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold text-slate-800">Kid of the Week</h1>
-        <p className="text-slate-500 text-sm">Auto-ranked by total points</p>
+        <p className="text-slate-500 text-sm">Rankings below are based on points only — not an official vote</p>
       </div>
 
       <KidOfMonthSetter kids={kids} />
@@ -236,6 +249,11 @@ export default function KidOfWeek() {
             {t.label}
           </button>
         ))}
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 text-xs text-blue-700 flex items-center gap-2">
+        <span>📊</span>
+        <span><strong>Note:</strong> These rankings are calculated automatically from points logged. They are a reference tool — Kid of the Month is a separate staff decision set above.</span>
       </div>
 
       {loading ? (
