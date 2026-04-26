@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks } from 'date-fns'
-import { Trophy, Star, TrendingUp } from 'lucide-react'
+import { Trophy, Star, TrendingUp, CheckCircle2 } from 'lucide-react'
 import { LEVEL_CONFIG, getLevel } from '../../lib/levels'
 
 function Confetti() {
@@ -41,6 +41,104 @@ function WinnerCard({ kid, total, rank, period }) {
         </div>
         <div className="text-3xl font-bold text-slate-800">{total} pts</div>
         <div className="text-sm text-slate-500 mt-1">{period} winner</div>
+      </div>
+    </div>
+  )
+}
+
+function KidOfMonthSetter({ kids }) {
+  const [selectedKid, setSelectedKid] = useState('')
+  const [monthLabel, setMonthLabel]   = useState(format(new Date(), 'MMMM yyyy'))
+  const [saving, setSaving]           = useState(false)
+  const [saved, setSaved]             = useState(false)
+  const [current, setCurrent]         = useState(null)
+
+  useEffect(() => {
+    supabase.from('settings').select('value').eq('key', 'kid_of_month').single()
+      .then(({ data }) => { if (data?.value) { setCurrent(data.value); setMonthLabel(data.value.month_label || format(new Date(), 'MMMM yyyy')) } })
+  }, [saved])
+
+  async function handleSave() {
+    if (!selectedKid) return
+    const kid = kids[selectedKid]
+    if (!kid) return
+    setSaving(true)
+    await supabase.from('settings').upsert({
+      key: 'kid_of_month',
+      value: { kid_id: selectedKid, kid_initials: kid.initials, month_label: monthLabel },
+      updated_at: new Date().toISOString(),
+    })
+    setSaving(false)
+    setSaved(v => !v)
+    setSelectedKid('')
+  }
+
+  async function handleClear() {
+    await supabase.from('settings').delete().eq('key', 'kid_of_month')
+    setCurrent(null)
+  }
+
+  const kidList = Object.values(kids)
+
+  return (
+    <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="font-bold text-amber-900 text-base flex items-center gap-2">
+            🏆 Kid of the Month
+          </div>
+          <div className="text-xs text-amber-700 mt-0.5">Voted by staff — not auto-calculated</div>
+        </div>
+        {current && (
+          <div className="text-right">
+            <div className="text-xs text-amber-600 font-semibold">Currently set:</div>
+            <div className="font-black text-amber-900 text-lg">{current.kid_initials}</div>
+            <div className="text-xs text-amber-700">{current.month_label}</div>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-semibold text-amber-800 mb-1.5">Select Youth</label>
+          <select
+            value={selectedKid}
+            onChange={e => setSelectedKid(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-xl border border-amber-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+          >
+            <option value="">-- Pick a kid --</option>
+            {kidList.map(k => (
+              <option key={k.id} value={k.id}>{k.initials}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-amber-800 mb-1.5">Month</label>
+          <input
+            value={monthLabel}
+            onChange={e => setMonthLabel(e.target.value)}
+            placeholder="e.g. April 2026"
+            className="w-full px-3 py-2.5 rounded-xl border border-amber-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={handleSave}
+          disabled={saving || !selectedKid}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm transition-colors disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : <><CheckCircle2 size={15} /> Set Kid of the Month</>}
+        </button>
+        {current && (
+          <button
+            onClick={handleClear}
+            className="px-4 py-2.5 rounded-xl border border-amber-300 text-amber-700 text-sm font-semibold hover:bg-amber-100 transition-colors"
+          >
+            Clear
+          </button>
+        )}
       </div>
     </div>
   )
@@ -124,6 +222,8 @@ export default function KidOfWeek() {
         <h1 className="text-2xl font-bold text-slate-800">Kid of the Week</h1>
         <p className="text-slate-500 text-sm">Auto-ranked by total points</p>
       </div>
+
+      <KidOfMonthSetter kids={kids} />
 
       <div className="flex gap-2 bg-slate-100 p-1 rounded-xl w-fit">
         {[

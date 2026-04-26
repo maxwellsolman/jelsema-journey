@@ -171,6 +171,11 @@ export default function EnterPoints() {
 
   async function handleSave(andNext = false) {
     if (!selectedKid) return
+    const hasInfractions = minors > 0 || majors > 0
+    if (hasInfractions && !staffNotes.trim()) {
+      setSaveError('Staff Notes are required when logging an infraction. Please explain what happened.')
+      return
+    }
     setSaving(true)
     setSaveError('')
 
@@ -384,10 +389,25 @@ export default function EnterPoints() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">Staff Notes</label>
+                  <label
+                    className="block text-xs font-semibold mb-1.5"
+                    style={{ color: (minors > 0 || majors > 0) ? '#DC2626' : '#64748B' }}>
+                    Staff Notes
+                    {(minors > 0 || majors > 0) && (
+                      <span className="ml-1 text-red-500">* Required for infractions</span>
+                    )}
+                  </label>
                   <textarea rows={2} value={staffNotes} onChange={e => setStaffNotes(e.target.value)}
-                    placeholder="Infraction details, behavior notes, anything relevant for the record…"
-                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-700 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    placeholder={
+                      (minors > 0 || majors > 0)
+                        ? 'Required: explain what happened and why points were deducted…'
+                        : 'Infraction details, behavior notes, anything relevant for the record…'
+                    }
+                    className={`w-full px-3 py-2.5 rounded-xl border text-sm text-slate-700 resize-none focus:outline-none focus:ring-2 transition-colors ${
+                      (minors > 0 || majors > 0) && !staffNotes.trim()
+                        ? 'border-red-300 focus:ring-red-400 bg-red-50'
+                        : 'border-slate-200 focus:ring-emerald-400'
+                    }`}
                   />
                 </div>
               </div>

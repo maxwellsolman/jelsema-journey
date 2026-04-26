@@ -75,7 +75,11 @@ export default function ManageKids() {
     })
 
     if (signUpErr) {
-      setError(signUpErr.message)
+      if (signUpErr.message?.toLowerCase().includes('already') || signUpErr.status === 422) {
+        setError(`A youth with initials "${initials.toUpperCase()}" already exists. Use different initials.`)
+      } else {
+        setError(signUpErr.message)
+      }
       setSaving(false)
       return
     }

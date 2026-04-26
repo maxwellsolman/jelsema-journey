@@ -21,7 +21,6 @@ import HowItWorks    from './pages/admin/HowItWorks'
 import KidDashboard from './pages/kid/Dashboard'
 import MyPoints     from './pages/kid/MyPoints'
 import MyMoney      from './pages/kid/MyMoney'
-import Leaderboard  from './pages/kid/Leaderboard'
 import Trends       from './pages/kid/Trends'
 
 function RequireAuth({ children, role }) {
@@ -78,10 +77,9 @@ function AppRoutes() {
       {/* Kid routes */}
       <Route path="/me" element={<RequireAuth role="kid"><KidLayout /></RequireAuth>}>
         <Route index element={<KidDashboard />} />
-        <Route path="points"      element={<MyPoints />} />
-        <Route path="money"       element={<MyMoney />} />
-        <Route path="leaderboard" element={<Leaderboard />} />
-        <Route path="trends"      element={<Trends />} />
+        <Route path="points"  element={<MyPoints />} />
+        <Route path="money"   element={<MyMoney />} />
+        <Route path="trends"  element={<Trends />} />
       </Route>
 
       {/* Catch-all */}

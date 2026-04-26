@@ -1,17 +1,16 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { Home, Star, DollarSign, Trophy, TrendingUp, LogOut, Flame, Zap } from 'lucide-react'
+import { Home, Star, DollarSign, TrendingUp, LogOut, Flame, Zap } from 'lucide-react'
 import { LEVEL_CONFIG } from '../../lib/levels'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { format } from 'date-fns'
 
 const NAV = [
-  { to: '/me',             label: 'Home',   icon: Home,       end: true },
-  { to: '/me/points',      label: 'Points', icon: Star },
-  { to: '/me/money',       label: 'Money',  icon: DollarSign },
-  { to: '/me/leaderboard', label: 'Ranks',  icon: Trophy },
-  { to: '/me/trends',      label: 'Trends', icon: TrendingUp },
+  { to: '/me',        label: 'Home',   icon: Home,       end: true },
+  { to: '/me/points', label: 'Points', icon: Star },
+  { to: '/me/money',  label: 'Money',  icon: DollarSign },
+  { to: '/me/trends', label: 'Trends', icon: TrendingUp },
 ]
 
 export default function KidLayout() {
@@ -19,6 +18,12 @@ export default function KidLayout() {
   const navigate = useNavigate()
   const [todayPts, setTodayPts]   = useState(null)
   const [streak, setStreak]       = useState(0)
+  const [kidOfMonth, setKidOfMonth] = useState(null)
+
+  useEffect(() => {
+    supabase.from('settings').select('value').eq('key', 'kid_of_month').single()
+      .then(({ data }) => { if (data?.value) setKidOfMonth(data.value) })
+  }, [])
 
   useEffect(() => {
     if (!profile?.id) return
@@ -83,6 +88,26 @@ export default function KidLayout() {
           </div>
         </div>
       </header>
+
+      {/* ── Kid of the Month banner ── */}
+      {kidOfMonth && (
+        <div className="bg-amber-50 border-b-2 border-amber-200">
+          <div className="max-w-lg mx-auto px-4 py-2 flex items-center gap-2">
+            <span style={{ fontSize: 18 }}>🏆</span>
+            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: '#92400e', fontSize: 13 }}>
+              Kid of the Month:
+            </span>
+            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, color: '#d97706', fontSize: 15 }}>
+              {kidOfMonth.kid_initials}
+            </span>
+            {kidOfMonth.month_label && (
+              <span style={{ fontFamily: 'var(--font-body)', color: '#b45309', fontSize: 12, marginLeft: 'auto' }}>
+                {kidOfMonth.month_label}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Page content ── */}
       <main className="flex-1 max-w-lg mx-auto w-full px-4 py-4 pb-28">
