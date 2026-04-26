@@ -216,7 +216,7 @@ export default function EnterPoints() {
       return
     }
 
-    syncLog({ ...payload, id: existing?.id })
+    syncLog({ ...payload, id: existing?.id, kid_initials: kids.find(k => k.id === selectedKid)?.initials || '' })
 
     // Update logged status panel
     setLoggedKids(prev => ({ ...prev, [selectedKid]: total }))

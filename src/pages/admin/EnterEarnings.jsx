@@ -77,7 +77,7 @@ export default function EnterEarnings() {
     if (err) {
       setSaveError(err.message)
     } else {
-      syncEarn({ ...payload, id: existing?.id })
+      syncEarn({ ...payload, id: existing?.id, kid_initials: kids.find(k => k.id === selectedKid)?.initials || '' })
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
       const { data } = await supabase.from('daily_earnings').select('*').eq('kid_id', selectedKid).eq('date', date).single()

@@ -238,7 +238,7 @@ export default function MyMoney() {
       created_by: profile.user_id,
     })
     if (!error) {
-      syncWallet({ kid_id: profile.id, amount, description, date: purchaseDate })
+      syncWallet({ kid_id: profile.id, amount, description, date: purchaseDate, kid_initials: profile.initials || '' })
       setTotalSpent(s => s + amount)
       setTransactions(prev => [
         { id: Date.now(), amount, description, date: purchaseDate, created_at: new Date().toISOString() },
