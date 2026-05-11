@@ -261,14 +261,19 @@ export default function KidDashboard() {
       const wkPts = logs.reduce((s, l) => s + l.total_pts, 0)
       setWeekTotal(wkPts)
 
+      const { data: kidRow } = await supabase.from('kids')
+        .select('opening_points, opening_dollars').eq('id', profile.id).maybeSingle()
+      const openDollars = parseFloat(kidRow?.opening_dollars) || 0
+      const openPoints  = parseInt(kidRow?.opening_points)    || 0
+
       const { data: earns } = await supabase.from('daily_earnings').select('total_earned')
         .eq('kid_id', profile.id).gte('date', wStart).lte('date', wEnd)
-      setBalance((earns || []).reduce((s, e) => s + (e.total_earned || 0), 0))
+      setBalance((earns || []).reduce((s, e) => s + (e.total_earned || 0), 0) + openDollars)
 
       const { data: redemptions } = await supabase.from('canteen_redemptions')
         .select('points_redeemed').eq('kid_id', profile.id).gte('redeemed_at', wStart)
       const spent = (redemptions || []).reduce((s, r) => s + (r.points_redeemed || 0), 0)
-      setCanteenBalance(Math.max(0, wkPts - spent))
+      setCanteenBalance(Math.max(0, wkPts + openPoints - spent))
 
       setLoading(false)
     }

@@ -35,7 +35,11 @@ function BehaviorCheck({ label, description, checked, onChange }) {
   )
 }
 
-function ShiftSection({ title, time, behaviors, state, setState, open, setOpen, maxPts }) {
+function ShiftSection({
+  title, time, behaviors, state, setState,
+  open, setOpen, maxPts, savedAt, savedBy,
+  onSave, saving, justSaved,
+}) {
   const earned = calcShiftPoints(state, behaviors)
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
@@ -45,8 +49,19 @@ function ShiftSection({ title, time, behaviors, state, setState, open, setOpen, 
         onClick={() => setOpen(v => !v)}
       >
         <div className="text-left">
-          <div className="font-bold text-slate-800">{title}</div>
-          <div className="text-xs text-slate-400">{time}</div>
+          <div className="font-bold text-slate-800 flex items-center gap-2">
+            {title}
+            {savedAt && <CheckCircle2 size={14} className="text-emerald-500" />}
+          </div>
+          <div className="text-xs text-slate-400">
+            {time}
+            {savedAt && (
+              <span className="ml-1 text-emerald-600 font-semibold">
+                · logged {format(new Date(savedAt), 'h:mma').toLowerCase()}
+                {savedBy ? ` by ${savedBy}` : ''}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <span className={`font-bold text-lg ${earned === maxPts ? 'text-emerald-500' : 'text-slate-700'}`}>
@@ -66,17 +81,22 @@ function ShiftSection({ title, time, behaviors, state, setState, open, setOpen, 
               onChange={v => setState(s => ({ ...s, [b.key]: v }))}
             />
           ))}
+          <button
+            onClick={onSave}
+            disabled={saving}
+            className={`w-full mt-2 py-3 rounded-xl font-bold text-white text-sm transition-all shadow flex items-center justify-center gap-2
+              ${justSaved ? 'bg-emerald-500' : savedAt ? 'bg-slate-600 hover:bg-slate-700' : 'bg-emerald-500 hover:bg-emerald-600'} disabled:opacity-60`}
+          >
+            {justSaved
+              ? <><CheckCircle2 size={16} /> Saved!</>
+              : saving
+                ? 'Saving…'
+                : <><Save size={14} /> {savedAt ? `Update ${title}` : `Save ${title}`}</>}
+          </button>
         </div>
       )}
     </div>
   )
-}
-
-function resetForm() {
-  return {
-    amState: {}, pmState: {}, ovState: {},
-    minors: 0, majors: 0, staffNotes: '', posExp: '', existing: null,
-  }
 }
 
 export default function EnterPoints() {
@@ -87,7 +107,7 @@ export default function EnterPoints() {
   const [selectedKid, setSelectedKid] = useState(searchParams.get('kid') || '')
   const [date, setDate]           = useState(searchParams.get('date') || TODAY)
 
-  // Per-day logged status: { kidId: total_pts }
+  // Per-day status: { kidId: { total_pts, am_saved_at, pm_saved_at, ov_saved_at } }
   const [loggedKids, setLoggedKids] = useState({})
 
   // Form state
@@ -105,33 +125,44 @@ export default function EnterPoints() {
   const [pmOpen, setPmOpen] = useState(false)
   const [ovOpen, setOvOpen] = useState(false)
 
-  // Save state
-  const [saving, setSaving]       = useState(false)
-  const [saved, setSaved]         = useState(false)
-  const [saveError, setSaveError] = useState('')
+  // Per-section save state
+  const [savingShift, setSavingShift] = useState(null) // 'am' | 'pm' | 'ov' | 'inf'
+  const [savedShift,  setSavedShift]  = useState(null)
+  const [saveError,   setSaveError]   = useState('')
+
+  // Admins map for attribution display
+  const [admins, setAdmins] = useState({})
 
   // Load kids list once
   useEffect(() => {
     supabase.from('kids').select('id, initials').eq('is_active', true).order('initials')
       .then(({ data }) => setKids(data || []))
+    supabase.from('admins').select('id, name')
+      .then(({ data }) => {
+        const m = {}
+        data?.forEach(a => { m[a.id] = a.name })
+        setAdmins(m)
+      })
   }, [])
 
   // Load which kids have been logged for the current date
   useEffect(() => {
     if (!date) return
-    supabase.from('daily_logs').select('kid_id, total_pts').eq('date', date)
+    supabase.from('daily_logs')
+      .select('kid_id, total_pts, am_saved_at, pm_saved_at, ov_saved_at')
+      .eq('date', date)
       .then(({ data }) => {
         const map = {}
-        data?.forEach(l => { map[l.kid_id] = l.total_pts })
+        data?.forEach(l => { map[l.kid_id] = l })
         setLoggedKids(map)
       })
   }, [date])
 
-  // Load existing log when kid+date changes, reset form if none
+  // Load existing log when kid+date changes
   useEffect(() => {
     if (!selectedKid || !date) return
     supabase.from('daily_logs').select('*')
-      .eq('kid_id', selectedKid).eq('date', date).single()
+      .eq('kid_id', selectedKid).eq('date', date).maybeSingle()
       .then(({ data }) => {
         if (data) {
           setExisting(data)
@@ -155,31 +186,28 @@ export default function EnterPoints() {
   const level = getLevel(total)
   const cfg   = LEVEL_CONFIG[level]
 
-  // Next unlogged kid after the current one
-  const nextUnlogged = (() => {
-    if (!selectedKid || kids.length === 0) return null
-    const idx = kids.findIndex(k => k.id === selectedKid)
-    for (let i = idx + 1; i < kids.length; i++) {
-      if (!(kids[i].id in loggedKids)) return kids[i]
-    }
-    for (let i = 0; i < idx; i++) {
-      if (!(kids[i].id in loggedKids)) return kids[i]
-    }
-    return null
-  })()
-
   const loggedCount = Object.keys(loggedKids).length
 
-  async function handleSave(andNext = false) {
-    if (!selectedKid) return
-    const hasInfractions = minors > 0 || majors > 0
-    if (hasInfractions && !staffNotes.trim()) {
-      setSaveError('Staff Notes are required when logging an infraction. Please explain what happened.')
-      return
+  async function persist(payload, isInsert) {
+    let result
+    if (isInsert) {
+      result = await supabase.from('daily_logs').insert(payload).select('*').single()
+    } else {
+      result = await supabase.from('daily_logs')
+        .update(payload).eq('id', existing.id).select('*').single()
     }
-    setSaving(true)
-    setSaveError('')
+    return result
+  }
 
+  async function saveShift(shift) {
+    if (!selectedKid) return
+    setSavingShift(shift); setSaveError('')
+
+    const now = new Date().toISOString()
+    const adminId = profile?.id || null
+
+    // Build base payload from current full form state so insert covers everything,
+    // but only attribute the shift the user clicked.
     const amPts = calcShiftPoints(amState, AM_BEHAVIORS)
     const pmPts = calcShiftPoints(pmState, PM_BEHAVIORS)
     const ovPts = calcShiftPoints(ovState, OVERNIGHT_BEHAVIORS)
@@ -188,7 +216,7 @@ export default function EnterPoints() {
       new Date(date + 'T12:00:00').toISOString()
     )
 
-    const payload = {
+    const fullPayload = {
       kid_id: selectedKid, date,
       ...amState, ...pmState, ...ovState,
       am_pts: amPts, pm_pts: pmPts, ov_pts: ovPts,
@@ -197,40 +225,46 @@ export default function EnterPoints() {
       privilege_freeze_until: freezeUntil,
       positive_experiences: posExp,
       staff_notes: staffNotes,
-      entered_by: profile?.id || null,
     }
 
-    let err
-    if (existing) {
-      const res = await supabase.from('daily_logs').update(payload).eq('id', existing.id)
-      err = res.error
-    } else {
-      const res = await supabase.from('daily_logs').insert(payload)
-      err = res.error
+    // Only stamp the shift being saved (preserve prior attribution on others)
+    if (shift === 'am') { fullPayload.am_entered_by = adminId; fullPayload.am_saved_at = now }
+    if (shift === 'pm') { fullPayload.pm_entered_by = adminId; fullPayload.pm_saved_at = now }
+    if (shift === 'ov') { fullPayload.ov_entered_by = adminId; fullPayload.ov_saved_at = now }
+
+    if (shift === 'inf') {
+      // Infractions save requires staff notes when an infraction is logged
+      if ((minors > 0 || majors > 0) && !staffNotes.trim()) {
+        setSaveError('Staff Notes are required when logging an infraction.')
+        setSavingShift(null)
+        return
+      }
     }
 
-    setSaving(false)
+    // Keep legacy entered_by for backward compatibility (latest writer wins)
+    fullPayload.entered_by = adminId
 
-    if (err) {
-      setSaveError(err.message)
-      return
-    }
+    const { data: row, error } = await persist(fullPayload, !existing)
+    setSavingShift(null)
 
-    syncLog({ ...payload, id: existing?.id, kid_initials: kids.find(k => k.id === selectedKid)?.initials || '' })
+    if (error) { setSaveError(error.message); return }
 
-    // Update logged status panel
-    setLoggedKids(prev => ({ ...prev, [selectedKid]: total }))
+    setExisting(row)
+    syncLog({ ...row, kid_initials: kids.find(k => k.id === selectedKid)?.initials || '' })
 
-    if (andNext && nextUnlogged) {
-      setSelectedKid(nextUnlogged.id)
-      // form will repopulate via useEffect
-    } else {
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
-      const { data } = await supabase.from('daily_logs').select('*')
-        .eq('kid_id', selectedKid).eq('date', date).single()
-      setExisting(data || null)
-    }
+    // Update the side panel status map
+    setLoggedKids(prev => ({
+      ...prev,
+      [selectedKid]: {
+        total_pts: row.total_pts,
+        am_saved_at: row.am_saved_at,
+        pm_saved_at: row.pm_saved_at,
+        ov_saved_at: row.ov_saved_at,
+      },
+    }))
+
+    setSavedShift(shift)
+    setTimeout(() => setSavedShift(null), 2000)
   }
 
   function handlePrevDay() {
@@ -286,8 +320,9 @@ export default function EnterPoints() {
             <span className="text-xs text-slate-400 py-1">No active youth</span>
           )}
           {kids.map(kid => {
-            const isLogged   = kid.id in loggedKids
+            const log        = loggedKids[kid.id]
             const isSelected = kid.id === selectedKid
+            const dots       = log ? [!!log.am_saved_at, !!log.pm_saved_at, !!log.ov_saved_at] : [false, false, false]
             return (
               <button
                 key={kid.id}
@@ -295,13 +330,16 @@ export default function EnterPoints() {
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shrink-0
                   ${isSelected
                     ? 'bg-emerald-500 text-white shadow'
-                    : isLogged
+                    : log
                       ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                       : 'bg-white border border-slate-200 text-slate-600'}`}
               >
-                {isLogged && !isSelected && <CheckCircle2 size={11} />}
                 {kid.initials}
-                {isLogged && <span className="opacity-80">{loggedKids[kid.id]}</span>}
+                <span className="flex gap-0.5 ml-0.5">
+                  {dots.map((d, i) => (
+                    <span key={i} className={`w-1.5 h-1.5 rounded-full ${d ? 'bg-emerald-500' : 'bg-slate-300/70'}`} />
+                  ))}
+                </span>
               </button>
             )
           })}
@@ -331,9 +369,9 @@ export default function EnterPoints() {
                     </span>
                   )}
                 </div>
-                {loggedCount > 0 && (
+                {kids.length > 0 && (
                   <span className="text-xs text-slate-500 font-semibold">
-                    {loggedCount}/{kids.length} logged today
+                    {loggedCount}/{kids.length} started today
                   </span>
                 )}
               </div>
@@ -342,23 +380,52 @@ export default function EnterPoints() {
               <div className={`${cfg.bgClass} ${cfg.borderClass} border rounded-2xl p-4 flex items-center justify-between`}>
                 <div>
                   <div className={`text-4xl font-bold ${cfg.textClass}`}>{total}</div>
-                  <div className="text-sm text-slate-500">pts</div>
+                  <div className="text-sm text-slate-500">pts (live)</div>
                 </div>
                 <div className={`px-4 py-2 rounded-xl ${cfg.badgeBg} ${cfg.badgeText} font-bold text-lg`}>
                   {cfg.emoji} {cfg.label}
                 </div>
               </div>
 
-              {/* Shifts */}
-              <ShiftSection title="Morning Shift"     time="6:00 AM – 2:00 PM"   behaviors={AM_BEHAVIORS}        state={amState} setState={setAmState} open={amOpen} setOpen={setAmOpen} maxPts={40} />
-              <ShiftSection title="Afternoon/Evening" time="2:00 PM – 10:00 PM"  behaviors={PM_BEHAVIORS}        state={pmState} setState={setPmState} open={pmOpen} setOpen={setPmOpen} maxPts={50} />
-              <ShiftSection title="Overnight"         time="10:00 PM – 6:00 AM"  behaviors={OVERNIGHT_BEHAVIORS} state={ovState} setState={setOvState} open={ovOpen} setOpen={setOvOpen} maxPts={10} />
+              {/* How it works */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-700">
+                Each shift saves independently. Morning, afternoon, and overnight staff each save their own section as they log it.
+              </div>
 
-              {/* Infractions */}
+              {/* Shifts */}
+              <ShiftSection
+                title="Morning Shift" time="6:00 AM – 2:00 PM"
+                behaviors={AM_BEHAVIORS} state={amState} setState={setAmState}
+                open={amOpen} setOpen={setAmOpen} maxPts={40}
+                savedAt={existing?.am_saved_at}
+                savedBy={existing?.am_entered_by ? admins[existing.am_entered_by] : null}
+                onSave={() => saveShift('am')}
+                saving={savingShift === 'am'} justSaved={savedShift === 'am'}
+              />
+              <ShiftSection
+                title="Afternoon/Evening" time="2:00 PM – 10:00 PM"
+                behaviors={PM_BEHAVIORS} state={pmState} setState={setPmState}
+                open={pmOpen} setOpen={setPmOpen} maxPts={50}
+                savedAt={existing?.pm_saved_at}
+                savedBy={existing?.pm_entered_by ? admins[existing.pm_entered_by] : null}
+                onSave={() => saveShift('pm')}
+                saving={savingShift === 'pm'} justSaved={savedShift === 'pm'}
+              />
+              <ShiftSection
+                title="Overnight" time="10:00 PM – 6:00 AM"
+                behaviors={OVERNIGHT_BEHAVIORS} state={ovState} setState={setOvState}
+                open={ovOpen} setOpen={setOvOpen} maxPts={10}
+                savedAt={existing?.ov_saved_at}
+                savedBy={existing?.ov_entered_by ? admins[existing.ov_entered_by] : null}
+                onSave={() => saveShift('ov')}
+                saving={savingShift === 'ov'} justSaved={savedShift === 'ov'}
+              />
+
+              {/* Infractions + Notes (saved together) */}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-slate-700">Infractions</h3>
-                  <span className="text-xs text-slate-400">Use − to remove a mistaken entry</span>
+                  <h3 className="font-bold text-slate-700">Infractions & Notes</h3>
+                  <span className="text-xs text-slate-400">Saved separately from shifts</span>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -380,10 +447,7 @@ export default function EnterPoints() {
                     {majors > 0 && <div className="text-xs text-red-500 mt-1 font-semibold">−{majors * MAJOR_DEDUCTION} pts</div>}
                   </div>
                 </div>
-              </div>
 
-              {/* Notes */}
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 mb-1.5">Positive Experiences</label>
                   <textarea rows={2} value={posExp} onChange={e => setPosExp(e.target.value)}
@@ -413,6 +477,19 @@ export default function EnterPoints() {
                     }`}
                   />
                 </div>
+
+                <button
+                  onClick={() => saveShift('inf')}
+                  disabled={savingShift === 'inf'}
+                  className={`w-full py-3 rounded-xl font-bold text-white text-sm transition-all shadow flex items-center justify-center gap-2
+                    ${savedShift === 'inf' ? 'bg-emerald-500' : 'bg-slate-700 hover:bg-slate-800'} disabled:opacity-60`}
+                >
+                  {savedShift === 'inf'
+                    ? <><CheckCircle2 size={16} /> Saved!</>
+                    : savingShift === 'inf'
+                      ? 'Saving…'
+                      : <><Save size={14} /> Save Infractions & Notes</>}
+                </button>
               </div>
 
               {saveError && (
@@ -420,67 +497,36 @@ export default function EnterPoints() {
                   ⚠️ Save failed: {saveError}
                 </div>
               )}
-
-              {/* Save buttons */}
-              <div className={`grid gap-3 ${nextUnlogged ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                <button
-                  onClick={() => handleSave(false)}
-                  disabled={saving}
-                  className={`py-4 rounded-2xl font-bold text-white text-sm transition-all shadow flex items-center justify-center gap-2
-                    ${saved ? 'bg-emerald-500' : 'bg-slate-700 hover:bg-slate-800'} disabled:opacity-60`}
-                >
-                  {saved ? <><CheckCircle2 size={18} /> Saved!</> : saving ? 'Saving…' : <><Save size={16} /> {existing ? 'Update' : 'Save'}</>}
-                </button>
-
-                {nextUnlogged && (
-                  <button
-                    onClick={() => handleSave(true)}
-                    disabled={saving}
-                    className="py-4 rounded-2xl font-bold text-white text-sm bg-emerald-500 hover:bg-emerald-600 transition-all shadow flex items-center justify-center gap-2 disabled:opacity-60"
-                  >
-                    <Save size={16} /> Save & Next
-                    <span className="opacity-75 text-xs font-semibold ml-0.5">→ {nextUnlogged.initials}</span>
-                  </button>
-                )}
-              </div>
-
-              {/* All done */}
-              {!nextUnlogged && loggedCount === kids.length && kids.length > 0 && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 text-sm text-emerald-700 font-semibold text-center">
-                  ✅ All {kids.length} youth logged for {isToday ? 'today' : format(dateObj, 'MMM d')}!
-                </div>
-              )}
             </>
           )}
 
-          {/* Bottom padding so save buttons clear the page */}
           <div className="h-8" />
         </div>
       </div>
 
       {/* ── Right kid panel (desktop only) ── */}
-      <div className="hidden md:flex flex-col w-48 shrink-0 border-l border-slate-100 bg-slate-50/60">
+      <div className="hidden md:flex flex-col w-52 shrink-0 border-l border-slate-100 bg-slate-50/60">
         <div className="sticky top-0 flex flex-col h-screen overflow-y-auto p-4 space-y-1.5">
 
-          {/* Header */}
           <div className="pb-2 border-b border-slate-100 mb-1">
             <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Youth</div>
-            {kids.length > 0 && (
-              <div className="text-xs text-slate-500 mt-0.5">
-                <span className={`font-bold ${loggedCount === kids.length ? 'text-emerald-600' : 'text-slate-700'}`}>
-                  {loggedCount}
-                </span>
-                <span> / {kids.length} logged</span>
-              </div>
-            )}
+            <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1.5">
+              <span className="flex gap-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              </span>
+              AM · PM · OV
+            </div>
           </div>
 
           {kids.map(kid => {
-            const isLogged   = kid.id in loggedKids
+            const log        = loggedKids[kid.id]
             const isSelected = kid.id === selectedKid
-            const pts        = loggedKids[kid.id]
-            const kidLevel   = isLogged ? getLevel(pts) : null
+            const pts        = log?.total_pts
+            const kidLevel   = log ? getLevel(pts) : null
             const kidCfg     = kidLevel ? LEVEL_CONFIG[kidLevel] : null
+            const dots       = [!!log?.am_saved_at, !!log?.pm_saved_at, !!log?.ov_saved_at]
 
             return (
               <button
@@ -489,48 +535,46 @@ export default function EnterPoints() {
                 className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all
                   ${isSelected
                     ? 'bg-slate-800 text-white shadow'
-                    : isLogged
+                    : log
                       ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
                       : 'hover:bg-slate-100 text-slate-600'}`}
               >
-                {/* Avatar / check */}
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0
                   ${isSelected
                     ? 'bg-white/20 text-white'
-                    : isLogged
+                    : log
                       ? 'bg-emerald-500 text-white'
                       : 'bg-slate-200 text-slate-500'}`}>
-                  {isLogged
-                    ? <CheckCircle2 size={14} />
-                    : <span>{kid.initials.slice(0, 2)}</span>}
+                  <span>{kid.initials.slice(0, 2)}</span>
                 </div>
 
-                {/* Name + score */}
                 <div className="flex-1 min-w-0">
                   <div className={`text-sm font-bold truncate ${isSelected ? 'text-white' : ''}`}>
                     {kid.initials}
                   </div>
-                  {isLogged && (
-                    <div className={`text-xs font-semibold ${isSelected ? 'text-white/70' : 'text-emerald-600'}`}>
-                      {kidCfg?.emoji} {pts} pts
-                    </div>
-                  )}
-                  {!isLogged && (
-                    <div className={`text-xs ${isSelected ? 'text-white/60' : 'text-slate-400'}`}>
-                      not logged
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="flex gap-0.5">
+                      {dots.map((d, i) => (
+                        <span
+                          key={i}
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            d
+                              ? 'bg-emerald-500'
+                              : isSelected ? 'bg-white/30' : 'bg-slate-300'
+                          }`}
+                        />
+                      ))}
+                    </span>
+                    {log
+                      ? <span className={`text-xs font-semibold ${isSelected ? 'text-white/70' : 'text-emerald-600'}`}>
+                          {kidCfg?.emoji} {pts}
+                        </span>
+                      : <span className={`text-xs ${isSelected ? 'text-white/60' : 'text-slate-400'}`}>not started</span>}
+                  </div>
                 </div>
               </button>
             )
           })}
-
-          {/* All done banner in panel */}
-          {kids.length > 0 && loggedCount === kids.length && (
-            <div className="mt-2 bg-emerald-500 rounded-xl px-3 py-2 text-center">
-              <div className="text-white text-xs font-bold">✅ All done!</div>
-            </div>
-          )}
         </div>
       </div>
 

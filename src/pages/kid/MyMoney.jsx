@@ -190,13 +190,19 @@ export default function MyMoney() {
   async function load() {
     if (!profile?.id) return
 
-    // All-time earnings (cumulative balance)
+    // Carry-over balances from paper system
+    const { data: kidRow } = await supabase.from('kids')
+      .select('opening_points, opening_dollars').eq('id', profile.id).maybeSingle()
+    const openDollars = parseFloat(kidRow?.opening_dollars) || 0
+    const openPoints  = parseInt(kidRow?.opening_points)    || 0
+
+    // All-time earnings (cumulative balance) — includes opening dollars
     const { data: allEarnsData } = await supabase.from('daily_earnings')
       .select('*').eq('kid_id', profile.id).order('date', { ascending: false })
     const allData = allEarnsData || []
     setAllEarnings(allData)
     const earned = allData.reduce((s, e) => s + (e.total_earned || 0), 0)
-    setTotalEarned(earned)
+    setTotalEarned(earned + openDollars)
 
     // This week's earnings for the strip
     const weekData = allData.filter(e => e.date >= wStart && e.date <= wEnd)
@@ -222,7 +228,7 @@ export default function MyMoney() {
     const { data: weekRedeemData } = await supabase.from('canteen_redemptions')
       .select('points_redeemed').eq('kid_id', profile.id).gte('redeemed_at', wStart)
     const weekRedeemed = (weekRedeemData || []).reduce((s, r) => s + (r.points_redeemed || 0), 0)
-    setWeekPtsBalance(Math.max(0, weekPtsTotal - weekRedeemed))
+    setWeekPtsBalance(Math.max(0, weekPtsTotal + openPoints - weekRedeemed))
 
     setLoading(false)
   }

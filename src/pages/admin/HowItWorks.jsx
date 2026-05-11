@@ -155,9 +155,9 @@ export default function HowItWorks() {
         </div>
       </Section>
 
-      <Section title="Kid of the Week / Month">
+      <Section title="Kid of the Month">
         <p className="text-sm text-slate-600">
-          The <strong>Kid of the Week</strong> page shows an auto-ranked leaderboard of all active youth based on their total points for the current week or month.
+          The <strong>Kid of the Month</strong> page shows an auto-ranked leaderboard of all active youth based on their total points for the current week or month.
           Rankings update in real-time as points are entered. Use this to recognize and motivate youth.
         </p>
       </Section>

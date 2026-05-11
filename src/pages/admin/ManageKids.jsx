@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { format, addHours, startOfWeek, subDays } from 'date-fns'
+import { format, addHours } from 'date-fns'
 import { UserPlus, UserX, X, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
-import { getLevel } from '../../lib/levels'
 import { syncKid } from '../../lib/sheets'
 
 function Modal({ title, onClose, children }) {
@@ -43,13 +42,20 @@ export default function ManageKids() {
   const [displayName, setDisplayName]         = useState('')
   const [intakeDate, setIntakeDate]           = useState(format(new Date(), 'yyyy-MM-dd'))
   const [birthday, setBirthday]               = useState('')
-  const [startingBalance, setStartingBalance] = useState('')
+  const [openingPoints, setOpeningPoints]     = useState('')
+  const [openingDollars, setOpeningDollars]   = useState('')
+  const [isExisting, setIsExisting]           = useState(false)
+  const [originalIntake, setOriginalIntake]   = useState('')
+  const [priorNotes, setPriorNotes]           = useState('')
   const [error, setError]                     = useState('')
 
   function resetForm() {
     setInitials(''); setDisplayName('')
     setIntakeDate(format(new Date(), 'yyyy-MM-dd'))
-    setBirthday(''); setStartingBalance(''); setError('')
+    setBirthday('')
+    setOpeningPoints(''); setOpeningDollars('')
+    setIsExisting(false); setOriginalIntake(''); setPriorNotes('')
+    setError('')
   }
 
   useEffect(() => { loadKids() }, [saved])
@@ -93,6 +99,8 @@ export default function ManageKids() {
     }
 
     const orientationEnd = addHours(new Date(intakeDate), 48).toISOString()
+    const openPts  = parseInt(openingPoints)   || 0
+    const openDol  = parseFloat(openingDollars) || 0
 
     const { data: newKid, error: insertErr } = await supabase.from('kids').insert({
       initials: initials.toUpperCase(),
@@ -101,43 +109,24 @@ export default function ManageKids() {
       orientation_end_at: orientationEnd,
       is_active: true,
       user_id: newUser.user?.id,
+      opening_points: openPts,
+      opening_dollars: openDol,
+      is_existing: isExisting,
+      original_intake_date: isExisting && originalIntake ? originalIntake : null,
+      prior_notes: isExisting ? (priorNotes || null) : null,
     }).select('id').single()
 
     if (insertErr) { setError(insertErr.message); setSaving(false); return }
 
-    // Create opening balance logs if provided
-    const balance = parseInt(startingBalance) || 0
-    if (balance > 0 && newKid?.id) {
-      const today    = format(new Date(), 'yyyy-MM-dd')
-      const wStart   = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-      let remaining  = Math.min(balance, 700) // weekly max
-      let dayPtr     = new Date(today + 'T12:00:00')
-      const weekStart = new Date(wStart + 'T12:00:00')
-      const logs     = []
-
-      // Fill days from today backwards through this week
-      while (remaining > 0 && dayPtr >= weekStart) {
-        const pts = Math.min(100, remaining)
-        logs.push({
-          kid_id: newKid.id,
-          date: format(dayPtr, 'yyyy-MM-dd'),
-          total_pts: pts,
-          am_pts: 0, pm_pts: 0, ov_pts: 0,
-          minor_infractions: 0, major_infractions: 0,
-          level_achieved: getLevel(pts),
-          staff_notes: `Opening balance — transferred from paper system (${balance} pts)`,
-        })
-        remaining -= pts
-        dayPtr = subDays(dayPtr, 1)
-      }
-
-      await supabase.from('daily_logs').insert(logs)
-    }
-
     setSaving(false)
     setShowAdd(false)
     syncKid({ id: newKid?.id, initials: initials.toUpperCase(), display_name: displayName || initials.toUpperCase(), intake_date: intakeDate, is_active: true })
-    setNewKidCreds({ initials: initials.toUpperCase(), password, startingBalance: balance })
+    setNewKidCreds({
+      initials: initials.toUpperCase(),
+      password,
+      openingPoints: openPts,
+      openingDollars: openDol,
+    })
     resetForm()
     setSaved(v => !v)
   }
@@ -162,6 +151,25 @@ export default function ManageKids() {
       supabase.from('daily_earnings').delete().eq('kid_id', kid.id),
     ])
     await supabase.from('kids').delete().eq('id', kid.id)
+
+    // Also delete their auth user so initials can be reused
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session && kid.user_id) {
+        await fetch(`${supabase.supabaseUrl}/functions/v1/delete-kid-auth`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type':  'application/json',
+            'apikey':         supabase.supabaseKey,
+          },
+          body: JSON.stringify({ auth_user_id: kid.user_id }),
+        })
+      }
+    } catch (err) {
+      console.warn('Auth user cleanup failed (kid row already deleted):', err)
+    }
+
     setDeleteConfirm(null)
     setSaved(v => !v)
   }
@@ -194,9 +202,10 @@ export default function ManageKids() {
             <div><span className="text-slate-500">Username:</span> <strong>{newKidCreds.initials}</strong></div>
             <div><span className="text-slate-500">Password:</span> <strong>{newKidCreds.password}</strong></div>
           </div>
-          {newKidCreds.startingBalance > 0 && (
-            <div className="text-sm text-emerald-700 bg-emerald-100 rounded-xl px-3 py-2">
-              ✅ {newKidCreds.startingBalance} opening points logged for this week.
+          {(newKidCreds.openingPoints > 0 || newKidCreds.openingDollars > 0) && (
+            <div className="text-sm text-emerald-700 bg-emerald-100 rounded-xl px-3 py-2 space-y-0.5">
+              {newKidCreds.openingPoints > 0 && <div>✅ Opening points balance: <strong>{newKidCreds.openingPoints}</strong></div>}
+              {newKidCreds.openingDollars > 0 && <div>✅ Opening dollar balance: <strong>${newKidCreds.openingDollars.toFixed(2)}</strong></div>}
             </div>
           )}
           <button onClick={() => setNewKidCreds(null)} className="text-xs text-slate-400 hover:underline">Dismiss</button>
@@ -217,10 +226,18 @@ export default function ManageKids() {
                 {kid.initials}
               </div>
               <div>
-                <div className="font-bold text-slate-800">{kid.initials}</div>
+                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                  {kid.initials}
+                  {kid.is_existing && (
+                    <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-semibold">Existing</span>
+                  )}
+                </div>
                 <div className="text-xs text-slate-400 space-x-2">
                   <span>Login: <strong className="text-slate-600">{kid.initials}</strong></span>
                   {kid.intake_date && <span>· Intake: {format(new Date(kid.intake_date + 'T12:00:00'), 'MMM d, yyyy')}</span>}
+                  {kid.last_paid_out_at && (
+                    <span>· Last paid: {format(new Date(kid.last_paid_out_at), 'MMM d')}</span>
+                  )}
                   {kid.orientation_end_at && new Date(kid.orientation_end_at) > new Date() && (
                     <span className="bg-slate-100 px-1.5 py-0.5 rounded">Orientation</span>
                   )}
@@ -311,34 +328,79 @@ export default function ManageKids() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1.5">Intake Date</label>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">Date Added to System</label>
               <input type="date" value={intakeDate} onChange={e => setIntakeDate(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1.5">
-                Starting Points Balance <span className="text-slate-400 font-normal">(optional)</span>
-              </label>
+            {/* Existing youth toggle */}
+            <label className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl border border-amber-100 bg-amber-50 cursor-pointer">
               <input
-                type="number"
-                min="0"
-                max="700"
-                value={startingBalance}
-                onChange={e => setStartingBalance(e.target.value)}
-                placeholder="0"
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                type="checkbox"
+                checked={isExisting}
+                onChange={e => setIsExisting(e.target.checked)}
+                className="mt-0.5 w-4 h-4 accent-amber-500"
               />
-              {startingBalance > 0 && (
-                <p className="text-xs text-amber-600 mt-1 font-medium">
-                  {startingBalance} pts will be logged as this week's entries so they can use them at canteen.
-                  {startingBalance > 700 && ' Max 700 pts (weekly limit).'}
-                </p>
-              )}
-              <p className="text-xs text-slate-400 mt-1">
-                Use this if the youth already has points from the paper system.
-              </p>
+              <div className="text-xs text-amber-800">
+                <div className="font-bold">Existing youth (already in program)</div>
+                <div>Check this if the youth was in the paper system before this app.</div>
+              </div>
+            </label>
+
+            {isExisting && (
+              <div className="space-y-3 px-3 py-3 rounded-xl border border-amber-100 bg-amber-50/40">
+                <div>
+                  <label className="block text-xs font-semibold text-amber-800 mb-1.5">Original Intake Date</label>
+                  <input type="date" value={originalIntake} onChange={e => setOriginalIntake(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-amber-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                  <p className="text-xs text-amber-700 mt-1">When the youth originally came into the shelter.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-amber-800 mb-1.5">Prior Notes (optional)</label>
+                  <textarea
+                    rows={2}
+                    value={priorNotes}
+                    onChange={e => setPriorNotes(e.target.value)}
+                    placeholder="Anything carry-over from paper records…"
+                    className="w-full px-3 py-2 rounded-xl border border-amber-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Opening balances */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                  Opening Points <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={openingPoints}
+                  onChange={e => setOpeningPoints(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                  Opening Dollars <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={openingDollars}
+                  onChange={e => setOpeningDollars(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                />
+              </div>
             </div>
+            <p className="text-xs text-slate-400 -mt-2">
+              Carry-over balances from the paper system. Added to the youth's wallet on day one. Excluded from trend charts and weekly leaderboards.
+            </p>
 
             <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 text-xs text-blue-700">
               <strong>Login info:</strong> Username = <strong>{initials || 'their initials'}</strong> · Password = birthday (e.g. 11182001)

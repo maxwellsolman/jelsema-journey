@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../context/AuthContext'
 import { format, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns'
 import { DollarSign, CheckCircle2 } from 'lucide-react'
 
@@ -9,51 +10,31 @@ function getWeekDates(refDate) {
   return { start, end, days: eachDayOfInterval({ start, end }) }
 }
 
-function paidKey(weekStart) {
-  return `jj-payout-${format(weekStart, 'yyyy-MM-dd')}`
-}
-
-function loadPaid(weekStart) {
-  try {
-    const raw = localStorage.getItem(paidKey(weekStart))
-    return raw ? JSON.parse(raw) : {}
-  } catch {
-    return {}
-  }
-}
-
-function savePaid(weekStart, paidMap) {
-  try {
-    localStorage.setItem(paidKey(weekStart), JSON.stringify(paidMap))
-  } catch {}
-}
-
 export default function WeeklyPayout() {
+  const { profile } = useAuth()
   const [refDate, setRefDate] = useState(new Date())
   const [kids, setKids]       = useState([])
   const [earnings, setEarnings] = useState([])
-  const [paid, setPaid]       = useState({})
   const [loading, setLoading] = useState(true)
 
   const { start, end, days } = getWeekDates(refDate)
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      // Load paid state from localStorage for this week
-      setPaid(loadPaid(start))
+  async function loadAll() {
+    setLoading(true)
+    const { data: kidsData } = await supabase
+      .from('kids')
+      .select('id, initials, last_paid_out_at, last_paid_out_amount')
+      .eq('is_active', true).order('initials')
+    const { data: earningsData } = await supabase
+      .from('daily_earnings').select('*')
+      .gte('date', format(start, 'yyyy-MM-dd'))
+      .lte('date', format(end, 'yyyy-MM-dd'))
+    setKids(kidsData || [])
+    setEarnings(earningsData || [])
+    setLoading(false)
+  }
 
-      const { data: kidsData } = await supabase.from('kids').select('id, initials').eq('is_active', true).order('initials')
-      const { data: earningsData } = await supabase
-        .from('daily_earnings').select('*')
-        .gte('date', format(start, 'yyyy-MM-dd'))
-        .lte('date', format(end, 'yyyy-MM-dd'))
-      setKids(kidsData || [])
-      setEarnings(earningsData || [])
-      setLoading(false)
-    }
-    load()
-  }, [start.toISOString(), end.toISOString()])
+  useEffect(() => { loadAll() /* eslint-disable-next-line */ }, [start.toISOString(), end.toISOString()])
 
   // Build map: kidId → { date → total_earned }
   const earningsMap = {}
@@ -65,24 +46,42 @@ export default function WeeklyPayout() {
   const weekTotal = (kidId) =>
     days.reduce((s, d) => s + (earningsMap[kidId]?.[format(d, 'yyyy-MM-dd')] || 0), 0)
 
-  const grandTotal = kids.reduce((s, k) => s + weekTotal(k.id), 0)
-  const paidTotal  = kids.filter(k => paid[k.id]).reduce((s, k) => s + weekTotal(k.id), 0)
+  // A kid is "paid for this week" if their last payout falls inside this week's range
+  const isPaidThisWeek = (kid) => {
+    if (!kid.last_paid_out_at) return false
+    const ts = new Date(kid.last_paid_out_at)
+    return ts >= start && ts <= new Date(end.getTime() + 86399999) // include all of Sunday
+  }
+
+  const grandTotal  = kids.reduce((s, k) => s + weekTotal(k.id), 0)
+  const paidTotal   = kids.filter(isPaidThisWeek).reduce((s, k) => s + weekTotal(k.id), 0)
   const unpaidTotal = grandTotal - paidTotal
 
-  function togglePaid(kidId) {
-    const next = { ...paid, [kidId]: !paid[kidId] }
-    setPaid(next)
-    savePaid(start, next)
+  async function togglePaid(kid) {
+    const paidNow = isPaidThisWeek(kid)
+    const total   = weekTotal(kid.id)
+    const update  = paidNow
+      ? { last_paid_out_at: null, last_paid_out_by: null, last_paid_out_amount: null }
+      : { last_paid_out_at: new Date().toISOString(), last_paid_out_by: profile?.id || null, last_paid_out_amount: total }
+    const { error } = await supabase.from('kids').update(update).eq('id', kid.id)
+    if (error) { alert(`Could not update: ${error.message}`); return }
+    setKids(prev => prev.map(k => k.id === kid.id ? { ...k, ...update } : k))
   }
 
-  function markAllPaid() {
-    const next = {}
-    kids.forEach(k => { next[k.id] = true })
-    setPaid(next)
-    savePaid(start, next)
+  async function markAllPaid() {
+    const now = new Date().toISOString()
+    const updates = kids
+      .filter(k => !isPaidThisWeek(k))
+      .map(k => supabase.from('kids').update({
+        last_paid_out_at: now,
+        last_paid_out_by: profile?.id || null,
+        last_paid_out_amount: weekTotal(k.id),
+      }).eq('id', k.id))
+    await Promise.all(updates)
+    await loadAll()
   }
 
-  const allPaid = kids.length > 0 && kids.every(k => paid[k.id])
+  const allPaid = kids.length > 0 && kids.every(isPaidThisWeek)
 
   return (
     <div className="p-6 space-y-5">
@@ -145,13 +144,17 @@ export default function WeeklyPayout() {
                     </th>
                   ))}
                   <th className="text-right px-5 py-3 font-semibold text-slate-700">Total</th>
+                  <th className="text-center px-4 py-3 font-semibold text-slate-500">Last paid</th>
                   <th className="text-center px-4 py-3 font-semibold text-slate-500">Paid</th>
                 </tr>
               </thead>
               <tbody>
                 {kids.map((kid, i) => {
-                  const total   = weekTotal(kid.id)
-                  const isPaid  = !!paid[kid.id]
+                  const total  = weekTotal(kid.id)
+                  const isPaid = isPaidThisWeek(kid)
+                  const lastPaidLabel = kid.last_paid_out_at
+                    ? format(new Date(kid.last_paid_out_at), 'MMM d')
+                    : '—'
                   return (
                     <tr key={kid.id}
                       className={`border-b border-slate-50 transition-colors ${isPaid ? 'bg-emerald-50/40' : i % 2 === 0 ? '' : 'bg-slate-50/50'}`}>
@@ -169,9 +172,12 @@ export default function WeeklyPayout() {
                       <td className="text-right px-5 py-3 font-bold text-emerald-600">
                         ${total.toFixed(2)}
                       </td>
+                      <td className="text-center px-4 py-3 text-xs text-slate-500">
+                        {lastPaidLabel}
+                      </td>
                       <td className="text-center px-4 py-3">
                         <button
-                          onClick={() => togglePaid(kid.id)}
+                          onClick={() => togglePaid(kid)}
                           title={isPaid ? 'Mark as unpaid' : 'Mark as paid'}
                           className={`p-1.5 rounded-full transition-colors ${isPaid ? 'text-emerald-500' : 'text-slate-300 hover:text-slate-400'}`}
                         >
@@ -186,7 +192,7 @@ export default function WeeklyPayout() {
           </div>
           <div className="px-5 py-3 border-t border-slate-50 bg-slate-50/60">
             <p className="text-xs text-slate-400">
-              ✓ Paid status is saved on this device. Navigate away and come back — checkmarks persist for this week.
+              ✓ Paid status is now stored in the database — visible to all admins across devices.
             </p>
           </div>
         </div>

@@ -232,7 +232,7 @@ export default function KidOfWeek() {
   return (
     <div className="p-6 space-y-6 max-w-2xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Kid of the Week</h1>
+        <h1 className="text-2xl font-bold text-slate-800">Kid of the Month</h1>
         <p className="text-slate-500 text-sm">Rankings below are based on points only — not an official vote</p>
       </div>
 

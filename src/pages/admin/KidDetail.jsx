@@ -209,10 +209,12 @@ export default function KidDetail() {
   const cfg       = level ? LEVEL_CONFIG[level] : null
   const frozen    = isPrivilegeFrozen(todayLog?.privilege_freeze_until)
   const freezeHrs = freezeHoursRemaining(todayLog?.privilege_freeze_until)
-  const weekTotal = weekEarnings.reduce((s, e) => s + (e.total_earned || 0), 0)
+  const openDollars = parseFloat(kid?.opening_dollars) || 0
+  const openPoints  = parseInt(kid?.opening_points)    || 0
+  const weekTotal = weekEarnings.reduce((s, e) => s + (e.total_earned || 0), 0) + openDollars
   const weekPts   = recentLogs.filter(l => l.date >= wStart && l.date <= wEnd).reduce((s, l) => s + l.total_pts, 0)
   const weekRedeemed = weekRedemptions.reduce((s, r) => s + (r.points_redeemed || 0), 0)
-  const weekBalance = Math.max(0, weekPts - weekRedeemed)
+  const weekBalance = Math.max(0, weekPts + openPoints - weekRedeemed)
   const avg30     = recentLogs.length ? Math.round(recentLogs.reduce((s, l) => s + l.total_pts, 0) / recentLogs.length) : null
   const rmDays    = recentLogs.filter(l => l.level_achieved === 'rolemodel').length
   const pinnedNotes = notes.filter(n => n.pinned)

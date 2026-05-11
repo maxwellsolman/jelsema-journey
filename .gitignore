@@ -25,3 +25,4 @@ dist-ssr
 
 # Environment — never commit real keys
 .env
+supabase/.temp/

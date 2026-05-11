@@ -21,7 +21,7 @@ const NAV_GROUPS = [
     label: 'Weekly & Admin',
     items: [
       { to: '/admin/payout',  label: 'Weekly Payout',   icon: DollarSign },
-      { to: '/admin/winner',  label: 'Kid of the Week', icon: Trophy },
+      { to: '/admin/winner',  label: 'Kid of the Month', icon: Trophy },
       { to: '/admin/reports', label: 'Reports',         icon: BarChart2 },
       { to: '/admin/kids',    label: 'Manage Kids',     icon: Users },
       { to: '/admin/howto',   label: 'How It Works',    icon: BookOpen },
