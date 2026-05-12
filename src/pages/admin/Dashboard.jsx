@@ -4,7 +4,8 @@ import { supabase } from '../../lib/supabase'
 import { getLevel, LEVEL_CONFIG } from '../../lib/levels'
 import { isPrivilegeFrozen } from '../../lib/points'
 import { format, startOfWeek, endOfWeek } from 'date-fns'
-import { ShieldAlert, Pin, ArrowRight, Trophy, Users } from 'lucide-react'
+import { ShieldAlert, Pin, ArrowRight, Trophy, TrendingUp, AlertTriangle } from 'lucide-react'
+import { subWeeks } from 'date-fns'
 
 // Returns 'am' | 'pm' | 'ov' for the current local hour.
 function currentShift(d = new Date()) {
@@ -50,6 +51,11 @@ export default function AdminDashboard() {
   const today  = format(new Date(), 'yyyy-MM-dd')
   const wStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const wEnd   = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const lwStart = format(startOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const lwEnd   = format(endOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+
+  const [lastWeekPtsMap, setLastWeekPtsMap] = useState({})
+  const [weekInfractions, setWeekInfractions] = useState(0)
 
   const shift     = currentShift()
   const shiftMeta = SHIFT_META[shift]
@@ -59,10 +65,20 @@ export default function AdminDashboard() {
       const { data: kidsData } = await supabase
         .from('kids').select('*').eq('is_active', true).order('initials')
 
-      const [{ data: logsData }, { data: weekLogs }, { data: pinnedNotes }] = await Promise.all([
+      const [
+        { data: logsData },
+        { data: weekLogs },
+        { data: lastWeekLogs },
+        { data: pinnedNotes },
+        { data: weekInfRows },
+      ] = await Promise.all([
         supabase.from('daily_logs').select('*').eq('date', today),
         supabase.from('daily_logs').select('kid_id, total_pts').gte('date', wStart).lte('date', wEnd),
+        supabase.from('daily_logs').select('kid_id, total_pts').gte('date', lwStart).lte('date', lwEnd),
         supabase.from('kid_notes').select('kid_id, body').eq('pinned', true),
+        supabase.from('daily_logs')
+          .select('minor_infractions, major_infractions')
+          .gte('date', wStart).lte('date', wEnd),
       ])
 
       const logsMap = {}
@@ -70,6 +86,13 @@ export default function AdminDashboard() {
 
       const wPts = {}
       weekLogs?.forEach(l => { wPts[l.kid_id] = (wPts[l.kid_id] || 0) + (l.total_pts || 0) })
+
+      const lwPts = {}
+      lastWeekLogs?.forEach(l => { lwPts[l.kid_id] = (lwPts[l.kid_id] || 0) + (l.total_pts || 0) })
+
+      const infCount = (weekInfRows || []).reduce(
+        (n, r) => n + (r.minor_infractions || 0) + (r.major_infractions || 0), 0,
+      )
 
       const pinned = {}
       pinnedNotes?.forEach(n => {
@@ -80,6 +103,8 @@ export default function AdminDashboard() {
       setKids(kidsData || [])
       setLogs(logsMap)
       setWeekPtsMap(wPts)
+      setLastWeekPtsMap(lwPts)
+      setWeekInfractions(infCount)
       setPinnedNotesMap(pinned)
       setLoading(false)
     }
@@ -93,7 +118,21 @@ export default function AdminDashboard() {
   const shiftRemaining = kids.length - shiftDone
   const shiftPct = kids.length ? Math.round((shiftDone / kids.length) * 100) : 0
 
-  const roleModelCount = Object.values(logs).filter(l => getLevel(l.total_pts) === 'rolemodel').length
+  // ── Weekly highlights ──
+  const sortedByWeek = kids
+    .map(k => ({ kid: k, pts: weekPtsMap[k.id] || 0 }))
+    .sort((a, b) => b.pts - a.pts)
+  const topOfWeek = sortedByWeek[0]?.pts > 0 ? sortedByWeek[0] : null
+
+  const improvements = kids
+    .map(k => {
+      const now  = weekPtsMap[k.id] || 0
+      const prev = lastWeekPtsMap[k.id] || 0
+      return { kid: k, delta: now - prev, now, prev }
+    })
+    .filter(x => x.now > 0)
+    .sort((a, b) => b.delta - a.delta)
+  const mostImproved = improvements[0]?.delta > 0 ? improvements[0] : null
 
   return (
     <div className="p-6 space-y-5 max-w-6xl mx-auto">
@@ -156,28 +195,41 @@ export default function AdminDashboard() {
         </div>
       </button>
 
-      {/* Secondary stat strip */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-2xl px-4 py-3 border border-slate-100 flex items-center gap-3">
-          <Trophy className="text-amber-500" size={18} />
-          <div>
-            <div className="text-lg font-bold text-slate-800 leading-none">{roleModelCount}</div>
-            <div className="text-xs text-slate-400 mt-1">Role models today</div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl px-4 py-3 border border-slate-100 flex items-center gap-3">
-          <ShieldAlert className={frozen.length ? 'text-red-500' : 'text-slate-300'} size={18} />
-          <div>
-            <div className="text-lg font-bold text-slate-800 leading-none">{frozen.length}</div>
-            <div className="text-xs text-slate-400 mt-1">Frozen</div>
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl px-4 py-3 border border-slate-100 flex items-center gap-3">
-          <Users className="text-emerald-500" size={18} />
-          <div>
-            <div className="text-lg font-bold text-slate-800 leading-none">{Object.keys(logs).length}</div>
-            <div className="text-xs text-slate-400 mt-1">Started today</div>
-          </div>
+      {/* Weekly highlights */}
+      <div>
+        <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">This Week</div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Top of the week */}
+          <HighlightCard
+            disabled={!topOfWeek}
+            onClick={() => topOfWeek && navigate(`/admin/kid/${topOfWeek.kid.id}`)}
+            icon={<Trophy size={18} className={topOfWeek ? 'text-amber-500' : 'text-slate-300'} />}
+            label="Top of the week"
+            value={topOfWeek ? topOfWeek.kid.initials : '—'}
+            detail={topOfWeek ? `${topOfWeek.pts} pts` : 'No points logged yet'}
+          />
+
+          {/* Most improved */}
+          <HighlightCard
+            disabled={!mostImproved}
+            onClick={() => mostImproved && navigate(`/admin/kid/${mostImproved.kid.id}`)}
+            icon={<TrendingUp size={18} className={mostImproved ? 'text-emerald-500' : 'text-slate-300'} />}
+            label="Most improved"
+            value={mostImproved ? mostImproved.kid.initials : '—'}
+            detail={mostImproved
+              ? `+${mostImproved.delta} vs last week`
+              : 'Not enough data yet'}
+          />
+
+          {/* Infractions this week */}
+          <HighlightCard
+            disabled={false}
+            onClick={() => navigate('/admin/infractions')}
+            icon={<AlertTriangle size={18} className={weekInfractions ? 'text-red-500' : 'text-slate-300'} />}
+            label="Infractions this week"
+            value={String(weekInfractions)}
+            detail={weekInfractions ? 'Tap to review' : 'Clean week so far'}
+          />
         </div>
       </div>
 
@@ -262,4 +314,24 @@ export default function AdminDashboard() {
 function isOrientation(kid) {
   if (!kid.orientation_end_at) return false
   return new Date(kid.orientation_end_at) > new Date()
+}
+
+function HighlightCard({ icon, label, value, detail, onClick, disabled }) {
+  const Tag = disabled ? 'div' : 'button'
+  return (
+    <Tag
+      onClick={disabled ? undefined : onClick}
+      className={`text-left bg-white rounded-2xl px-4 py-3 border border-slate-100 transition-all flex items-center gap-3 w-full ${
+        disabled ? 'opacity-70 cursor-default' : 'hover:shadow-md hover:-translate-y-0.5'
+      }`}
+    >
+      <div className="shrink-0">{icon}</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">{label}</div>
+        <div className="text-lg font-bold text-slate-800 leading-tight truncate">{value}</div>
+        <div className="text-xs text-slate-500 truncate">{detail}</div>
+      </div>
+      {!disabled && <ArrowRight size={14} className="text-slate-300 shrink-0" />}
+    </Tag>
+  )
 }
