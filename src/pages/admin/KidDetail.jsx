@@ -10,8 +10,61 @@ import TrendChart from '../../components/charts/TrendChart'
 import {
   ArrowLeft, ShieldAlert, Star, DollarSign, TrendingUp,
   Pin, PinOff, Send, Trash2, ClipboardList, ChevronDown, ChevronUp,
-  Pencil, ShoppingBag, AlertCircle
+  Pencil, ShoppingBag, AlertCircle, X
 } from 'lucide-react'
+
+function LogPurchaseModal({ kidInitials, onClose, onSave }) {
+  const [amount, setAmount] = useState('')
+  const [desc, setDesc]     = useState('')
+  const [date, setDate]     = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState('')
+
+  async function handleSubmit() {
+    const amt = parseFloat(amount)
+    if (!amt || amt <= 0) { setError('Enter a valid amount.'); return }
+    setSaving(true); setError('')
+    const { error: err } = await onSave({ amount: amt, description: desc.trim() || null, date })
+    setSaving(false)
+    if (err) { setError(err.message); return }
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4" onClick={onClose}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div className="font-bold text-slate-800">🛒 Log Purchase for {kidInitials}</div>
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600"><X size={20} /></button>
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-500 mb-1.5">Amount Spent ($)</label>
+          <input type="number" min="0.01" step="0.01" value={amount} onChange={e => setAmount(e.target.value)}
+            placeholder="e.g. 3.50" autoFocus
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-500 mb-1.5">
+            What was it? <span className="font-normal text-slate-400">(optional)</span>
+          </label>
+          <input type="text" value={desc} onChange={e => setDesc(e.target.value)}
+            placeholder="e.g. Snacks from the store"
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-slate-500 mb-1.5">Date</label>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} max={format(new Date(), 'yyyy-MM-dd')}
+            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+        </div>
+        {error && <div className="bg-red-50 text-red-600 text-xs px-3 py-2 rounded-lg border border-red-100">{error}</div>}
+        <button onClick={handleSubmit} disabled={saving || !amount}
+          className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm disabled:opacity-50">
+          {saving ? 'Saving…' : 'Log Purchase'}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 function BehaviorRow({ label, earned }) {
   return (
@@ -128,6 +181,18 @@ export default function KidDetail() {
   const [noteError, setNoteError]   = useState('')
   const [loading, setLoading]       = useState(true)
   const [tab, setTab]               = useState('overview') // overview | history | notes
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false)
+
+  async function handleLogPurchase({ amount, description, date: purchaseDate }) {
+    const { error } = await supabase.from('wallet_transactions').insert({
+      kid_id: kidId,
+      amount,
+      description,
+      date: purchaseDate,
+      created_by: profile?.user_id,
+    })
+    return { error }
+  }
 
   const today   = format(new Date(), 'yyyy-MM-dd')
   const since30 = format(subDays(new Date(), 29), 'yyyy-MM-dd')
@@ -284,6 +349,16 @@ export default function KidDetail() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Quick actions */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => setShowPurchaseModal(true)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold border border-emerald-100 transition-colors"
+        >
+          <DollarSign size={13} /> Log purchase for {kid?.initials}
+        </button>
       </div>
 
       {/* Quick stats */}
@@ -478,6 +553,14 @@ export default function KidDetail() {
             </div>
           )}
         </div>
+      )}
+
+      {showPurchaseModal && (
+        <LogPurchaseModal
+          kidInitials={kid?.initials || ''}
+          onClose={() => setShowPurchaseModal(false)}
+          onSave={handleLogPurchase}
+        />
       )}
     </div>
   )

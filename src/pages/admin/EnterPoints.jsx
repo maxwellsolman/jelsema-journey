@@ -169,8 +169,11 @@ export default function EnterPoints() {
       })
   }, [date])
 
-  // Load earnings for current kid+date
+  // Load earnings for current kid+date — reset immediately to avoid showing the
+  // previous kid's checks while the new row is being fetched.
   useEffect(() => {
+    setEarnRowId(null)
+    setEarn({ reading_log: false, planner: false, mindfulness: false })
     if (!selectedKid || !date) return
     supabase.from('daily_earnings').select('*')
       .eq('kid_id', selectedKid).eq('date', date).maybeSingle()
@@ -178,9 +181,6 @@ export default function EnterPoints() {
         if (data) {
           setEarnRowId(data.id)
           setEarn({ reading_log: !!data.reading_log, planner: !!data.planner, mindfulness: !!data.mindfulness })
-        } else {
-          setEarnRowId(null)
-          setEarn({ reading_log: false, planner: false, mindfulness: false })
         }
       })
   }, [selectedKid, date])
