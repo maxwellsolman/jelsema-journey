@@ -69,15 +69,29 @@ export default function KidLayout() {
           {/* Stats row — Duolingo style */}
           <div className="flex items-center gap-3">
             {/* Streak */}
-            <button onClick={() => navigate('/me')} className="streak-pill cursor-pointer active:scale-95 transition-transform">
-              <Flame size={15} className="text-orange-500" />
-              {streak}
+            <button onClick={() => navigate('/me')}
+              className="flex flex-col items-center gap-0.5 cursor-pointer active:scale-95 transition-transform"
+              title="Days in a row you've shown up">
+              <div className="streak-pill">
+                <Flame size={15} className="text-orange-500" />
+                {streak}
+              </div>
+              <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:9, color:'#AFAFAF',
+                             textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                Streak
+              </span>
             </button>
 
             {/* XP today */}
-            <div className="xp-pill">
-              <Zap size={13} className="text-amber-500" />
-              {todayPts ?? 0}
+            <div className="flex flex-col items-center gap-0.5" title="Points earned today">
+              <div className="xp-pill">
+                <Zap size={13} className="text-amber-500" />
+                {todayPts ?? 0}
+              </div>
+              <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:9, color:'#AFAFAF',
+                             textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                Today
+              </span>
             </div>
 
             {/* Sign out */}

@@ -94,8 +94,8 @@ function ShiftNode({ label, pts, max, icon, delay }) {
   )
 }
 
-// ── Week strip (Mon–Sun) ────────────────────────────────────────
-function WeekStrip({ weekLogs, wStart, today }) {
+// ── Week strip (Sun–Sat) ────────────────────────────────────────
+function WeekStrip({ weekLogs, wStart, today, onDayClick }) {
   const days = Array.from({ length:7 }, (_, i) =>
     format(addDays(new Date(wStart + 'T12:00:00'), i), 'yyyy-MM-dd')
   )
@@ -106,7 +106,7 @@ function WeekStrip({ weekLogs, wStart, today }) {
     <div className="slide-up duo-card p-4" style={{ '--delay':'180ms' }}>
       <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:12, color:'var(--duo-text-lt)',
                     textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:12 }}>
-        This Week
+        This Week — tap a day to see how you did
       </div>
       <div className="flex justify-between gap-1">
         {days.map((date, i) => {
@@ -117,9 +117,16 @@ function WeekStrip({ weekLogs, wStart, today }) {
           const lv       = pts !== null ? getLevel(pts) : null
           const duo      = lv ? DUO_LEVEL[lv] : null
           const dayName  = format(new Date(date + 'T12:00:00'), 'EEE')
+          const clickable = !isFuture && pts !== null
 
           return (
-            <div key={date} className="flex-1 flex flex-col items-center gap-1">
+            <button
+              key={date}
+              type="button"
+              disabled={!clickable}
+              onClick={() => clickable && onDayClick(date, log, duo)}
+              className={`flex-1 flex flex-col items-center gap-1 rounded-xl py-1 transition-transform ${clickable ? 'active:scale-95 hover:bg-slate-50' : 'cursor-default'}`}
+            >
               <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:10,
                             color: isToday ? '#58CC02' : 'var(--duo-text-lt)', textTransform:'uppercase' }}>
                 {dayName}
@@ -145,9 +152,65 @@ function WeekStrip({ weekLogs, wStart, today }) {
                             color: isFuture ? '#D5D5D5' : pts !== null ? (duo?.text || '#AFAFAF') : '#AFAFAF' }}>
                 {isFuture ? '' : pts !== null ? pts : '—'}
               </div>
-            </div>
+            </button>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// ── Day detail modal ────────────────────────────────────────────
+function DayDetailModal({ date, log, duo, onClose }) {
+  if (!date) return null
+  const dateObj = new Date(date + 'T12:00:00')
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center px-4 pb-4" onClick={onClose}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}
+        style={{ animation: 'bounceIn 320ms cubic-bezier(0.34, 1.56, 0.64, 1)' }}>
+        <div className="text-center space-y-3">
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:13, color:'var(--duo-text-lt)',
+                        textTransform:'uppercase', letterSpacing:'0.06em' }}>
+            {format(dateObj, 'EEEE, MMM d')}
+          </div>
+          <div style={{ fontSize:48 }}>{duo?.emoji || '·'}</div>
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:42, color:duo?.fill, lineHeight:1 }}>
+            {log?.total_pts ?? 0}
+          </div>
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:14, color:duo?.text }}>
+            {duo?.label}
+          </div>
+
+          {/* Shift breakdown */}
+          <div className="grid grid-cols-3 gap-2 pt-3">
+            <div className="rounded-2xl bg-slate-50 py-2">
+              <div className="text-lg">☀️</div>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:16, color:'var(--duo-text)' }}>
+                {log?.am_pts ?? 0}<span className="text-xs text-slate-400">/40</span>
+              </div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Morning</div>
+            </div>
+            <div className="rounded-2xl bg-slate-50 py-2">
+              <div className="text-lg">🌆</div>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:16, color:'var(--duo-text)' }}>
+                {log?.pm_pts ?? 0}<span className="text-xs text-slate-400">/50</span>
+              </div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Afternoon</div>
+            </div>
+            <div className="rounded-2xl bg-slate-50 py-2">
+              <div className="text-lg">🌙</div>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:16, color:'var(--duo-text)' }}>
+                {log?.ov_pts ?? 0}<span className="text-xs text-slate-400">/10</span>
+              </div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Night</div>
+            </div>
+          </div>
+
+          <button onClick={onClose}
+            className="w-full mt-4 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm shadow">
+            Got it
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -235,11 +298,12 @@ export default function KidDashboard() {
   const [canteenBalance, setCanteenBalance] = useState(0)
   const [loading, setLoading]             = useState(true)
   const [showConfetti, setShowConfetti]   = useState(false)
+  const [dayDetail, setDayDetail]         = useState(null) // {date, log, duo}
 
   const today     = format(new Date(), 'yyyy-MM-dd')
   const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd')
-  const wStart    = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-  const wEnd      = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const wStart    = format(startOfWeek(new Date(), { weekStartsOn: 0 }), 'yyyy-MM-dd')
+  const wEnd      = format(endOfWeek(new Date(), { weekStartsOn: 0 }), 'yyyy-MM-dd')
   const isSunday = new Date().getDay() === 0
 
   useEffect(() => {
@@ -254,7 +318,7 @@ export default function KidDashboard() {
       setYesterdayLog(yLog || null)
 
       const { data: wl } = await supabase.from('daily_logs')
-        .select('date, total_pts, level_achieved').eq('kid_id', profile.id)
+        .select('date, total_pts, level_achieved, am_pts, pm_pts, ov_pts').eq('kid_id', profile.id)
         .gte('date', wStart).lte('date', wEnd).order('date')
       const logs = wl || []
       setWeekLogs(logs)
@@ -302,14 +366,25 @@ export default function KidDashboard() {
     </div>
   )
 
-  const pts       = todayLog?.total_pts ?? null
-  const level     = pts !== null ? getLevel(pts, isOrientation(profile)) : LEVELS.REFOCUS
-  const duo       = DUO_LEVEL[level]
-  const progress  = pts !== null ? progressToNextLevel(pts) : null
-  const frozen    = isPrivilegeFrozen(todayLog?.privilege_freeze_until)
-  const freezeHrs = freezeHoursRemaining(todayLog?.privilege_freeze_until)
+  // Big level badge = YESTERDAY's standing (the kid's "current rank")
+  // Today is shown as a separate, in-progress widget below.
+  const yPts      = yesterdayLog?.total_pts ?? null
+  const yLevel    = yPts !== null ? getLevel(yPts, isOrientation(profile)) : null
+  const yDuo      = yLevel ? DUO_LEVEL[yLevel] : DUO_LEVEL[LEVELS.REFOCUS]
+
+  const tPts      = todayLog?.total_pts ?? null
+  const tLevel    = tPts !== null ? getLevel(tPts, isOrientation(profile)) : null
+  const tDuo      = tLevel ? DUO_LEVEL[tLevel] : null
+
+  // Use today's progress for the live progress bar if today has any pts; otherwise yesterday's
+  const progress      = tPts !== null ? progressToNextLevel(tPts) : (yPts !== null ? progressToNextLevel(yPts) : null)
+  const heroDuo       = yLevel ? yDuo : DUO_LEVEL[LEVELS.REFOCUS]
+  const heroPts       = yPts ?? 0
+  const frozen        = isPrivilegeFrozen(todayLog?.privilege_freeze_until)
+  const freezeHrs     = freezeHoursRemaining(todayLog?.privilege_freeze_until)
   const inOrientation = isOrientation(profile)
-  const isRoleModel   = level === LEVELS.ROLEMODEL && pts !== null
+  const isRoleModel   = tLevel === LEVELS.ROLEMODEL && tPts !== null
+  const shiftsLoggedToday = todayLog ? [todayLog.am_saved_at, todayLog.pm_saved_at, todayLog.ov_saved_at].filter(Boolean).length : 0
 
   return (
     <div className="relative pb-2" style={{ minHeight: '100vh' }}>
@@ -353,30 +428,30 @@ export default function KidDashboard() {
           </div>
         )}
 
-        {/* ── Level hero card ── */}
+        {/* ── Standing card (anchored on yesterday) ── */}
         <div className={`slide-up bounce-in duo-card overflow-hidden ${isRoleModel ? 'rm-glow' : ''}`}
-          style={{ borderColor:duo.border, borderWidth:2.5, '--delay':'60ms' }}>
-          <div className="h-2 w-full" style={{ background:duo.gradient }} />
+          style={{ borderColor:heroDuo.border, borderWidth:2.5, '--delay':'60ms' }}>
+          <div className="h-2 w-full" style={{ background:heroDuo.gradient }} />
           <div className="p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <div style={{ fontFamily:'var(--font-display)', fontWeight:700, color:'var(--duo-text-lt)',
                               fontSize:11, textTransform:'uppercase', letterSpacing:'0.08em' }}>
-                  Current Level
+                  {yPts !== null ? 'Yesterday\'s Standing' : 'Your Standing'}
                 </div>
                 <div className="level-badge-3d mt-1"
-                  style={{ background:duo.bg, color:duo.text, borderColor:duo.border, borderBottomColor:duo.fill }}>
-                  <span style={{ fontSize:20 }}>{duo.emoji}</span>
-                  <span style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:18 }}>{duo.label}</span>
+                  style={{ background:heroDuo.bg, color:heroDuo.text, borderColor:heroDuo.border, borderBottomColor:heroDuo.fill }}>
+                  <span style={{ fontSize:20 }}>{heroDuo.emoji}</span>
+                  <span style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:18 }}>{heroDuo.label}</span>
                 </div>
               </div>
               <div className="text-right">
                 <div className="pop-in" style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:52,
-                                                 color:duo.fill, lineHeight:1, '--delay':'200ms' }}>
-                  {pts !== null ? pts : (yesterdayLog?.total_pts ?? '—')}
+                                                 color:heroDuo.fill, lineHeight:1, '--delay':'200ms' }}>
+                  {yPts ?? '—'}
                 </div>
                 <div style={{ fontFamily:'var(--font-display)', fontWeight:700, color:'var(--duo-text-lt)', fontSize:12 }}>
-                  {pts !== null ? 'pts today' : yesterdayLog ? 'pts yesterday' : 'pts today'}
+                  {yPts !== null ? 'pts yesterday' : 'no log yet'}
                 </div>
                 <div style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:13, color:'#2563EB', marginTop:4 }}>
                   {weekTotal} pts this week
@@ -384,37 +459,78 @@ export default function KidDashboard() {
               </div>
             </div>
 
-            {progress && pts !== null && (
-              <div>
-                <div className="flex justify-between mb-1.5"
-                  style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:12, color:'var(--duo-text-lt)' }}>
-                  <span>{progress.ptsNeeded} pts to {progress.nextLabel}</span>
-                  <span style={{ color:duo.fill }}>{progress.pct}%</span>
-                </div>
-                <div className="duo-progress">
-                  <div className="duo-progress-fill" style={{ width:`${progress.pct}%`, background:duo.gradient,
-                                                              transition:'width 800ms cubic-bezier(0.22,1,0.36,1)' }} />
-                </div>
-              </div>
-            )}
-
-            {isRoleModel && (
-              <div className="mt-3 rounded-2xl py-2.5 text-center ring-pulse"
-                style={{ background:'#F0FDF4', color:'#16A34A', fontFamily:'var(--font-display)', fontWeight:800, fontSize:14 }}>
-                🏆 You hit Role Model today — amazing!
-              </div>
-            )}
-            {pts === null && (
+            {yPts === null && (
               <div className="mt-2 rounded-2xl py-2.5 px-3 text-center"
                 style={{ background:'#F7F7F7', color:'var(--duo-text-lt)', fontFamily:'var(--font-display)', fontWeight:700, fontSize:13 }}>
-                {yesterdayLog ? "Showing yesterday's score — today's not logged yet" : "Points not logged yet today"}
+                Your standing shows up once you have a full day logged.
               </div>
             )}
           </div>
         </div>
 
+        {/* ── Today so far (live, in-progress) ── */}
+        <div className="slide-up duo-card p-4 flex items-center justify-between" style={{ '--delay':'120ms' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0"
+              style={{ background: tDuo ? tDuo.bg : '#F1F5F9' }}>
+              {tDuo ? tDuo.emoji : '⏳'}
+            </div>
+            <div>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:700, color:'var(--duo-text-lt)',
+                            fontSize:11, textTransform:'uppercase', letterSpacing:'0.06em' }}>
+                Today So Far
+              </div>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:22,
+                            color:tDuo?.fill || 'var(--duo-text-lt)', lineHeight:1.1 }}>
+                {tPts ?? 0} <span style={{ fontSize:13, color:'var(--duo-text-lt)', fontWeight:700 }}>pts</span>
+              </div>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:11, color:'var(--duo-text-lt)', marginTop:2 }}>
+                {shiftsLoggedToday === 3
+                  ? 'All 3 shifts logged ✓'
+                  : `${3 - shiftsLoggedToday} shift${3 - shiftsLoggedToday === 1 ? '' : 's'} left to log`}
+              </div>
+            </div>
+          </div>
+          {/* Mini shift dots */}
+          <div className="flex flex-col items-end gap-1.5">
+            <div className="flex items-center gap-1">
+              {['am_saved_at','pm_saved_at','ov_saved_at'].map(k => (
+                <span key={k} className="w-2.5 h-2.5 rounded-full"
+                  style={{ background: todayLog?.[k] ? '#58CC02' : '#D5D5D5' }} />
+              ))}
+            </div>
+            <div className="text-[10px] uppercase tracking-wider font-bold" style={{ color:'#AFAFAF' }}>
+              AM · PM · OV
+            </div>
+          </div>
+        </div>
+
+        {progress && (yPts !== null || tPts !== null) && (
+          <div className="slide-up duo-card p-4" style={{ '--delay':'150ms' }}>
+            <div className="flex justify-between mb-1.5"
+              style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:12, color:'var(--duo-text-lt)' }}>
+              <span>{progress.ptsNeeded} pts to {progress.nextLabel}</span>
+              <span style={{ color:(tDuo || heroDuo).fill }}>{progress.pct}%</span>
+            </div>
+            <div className="duo-progress">
+              <div className="duo-progress-fill" style={{ width:`${progress.pct}%`, background:(tDuo || heroDuo).gradient,
+                                                          transition:'width 800ms cubic-bezier(0.22,1,0.36,1)' }} />
+            </div>
+          </div>
+        )}
+
+        {isRoleModel && (
+          <div className="slide-up rounded-2xl py-2.5 text-center ring-pulse"
+            style={{ background:'#F0FDF4', color:'#16A34A', fontFamily:'var(--font-display)', fontWeight:800, fontSize:14, '--delay':'180ms' }}>
+            🏆 You hit Role Model today — amazing!
+          </div>
+        )}
+
         {/* ── Week strip ── */}
-        <WeekStrip weekLogs={weekLogs} wStart={wStart} today={today} />
+        <WeekStrip weekLogs={weekLogs} wStart={wStart} today={today}
+          onDayClick={(date, log, duo) => setDayDetail({ date, log, duo })} />
+
+        <DayDetailModal {...(dayDetail || {})} onClose={() => setDayDetail(null)} />
 
         {/* ── Shifts (today or yesterday fallback) ── */}
         {(todayLog || yesterdayLog) && (() => {
@@ -450,8 +566,8 @@ export default function KidDashboard() {
         })()}
 
         {/* ── Game plan ── */}
-        {todayLog && level !== LEVELS.ROLEMODEL && pts !== null && (
-          <GamePlanCard todayLog={todayLog} currentPts={pts} />
+        {todayLog && tLevel !== LEVELS.ROLEMODEL && tPts !== null && (
+          <GamePlanCard todayLog={todayLog} currentPts={tPts} />
         )}
 
         {/* ── Stats bubbles ── */}
@@ -480,7 +596,7 @@ export default function KidDashboard() {
             { lv:LEVELS.ROLEMODEL, range:'86–100 pts' },
           ].map(({ lv, range }) => {
             const d    = DUO_LEVEL[lv]
-            const isMe = level === lv
+            const isMe = (tLevel || yLevel) === lv
             return (
               <div key={lv} className="flex items-center justify-between rounded-2xl px-3 py-2.5 transition-all"
                 style={{ background:isMe ? d.bg : '#F7F7F7', border:isMe ? `2px solid ${d.border}` : '2px solid transparent' }}>

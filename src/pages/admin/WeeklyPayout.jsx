@@ -5,8 +5,8 @@ import { format, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns'
 import { DollarSign, CheckCircle2 } from 'lucide-react'
 
 function getWeekDates(refDate) {
-  const start = startOfWeek(refDate, { weekStartsOn: 1 }) // Monday
-  const end   = endOfWeek(refDate, { weekStartsOn: 1 })
+  const start = startOfWeek(refDate, { weekStartsOn: 0 }) // Monday
+  const end   = endOfWeek(refDate, { weekStartsOn: 0 })
   return { start, end, days: eachDayOfInterval({ start, end }) }
 }
 

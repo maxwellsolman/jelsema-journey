@@ -175,10 +175,10 @@ export default function KidOfWeek() {
       setKids(kidsMap)
 
       const now     = new Date()
-      const wStart  = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd')
-      const wEnd    = format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd')
-      const lwStart = format(startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-      const lwEnd   = format(endOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+      const wStart  = format(startOfWeek(now, { weekStartsOn: 0 }), 'yyyy-MM-dd')
+      const wEnd    = format(endOfWeek(now, { weekStartsOn: 0 }), 'yyyy-MM-dd')
+      const lwStart = format(startOfWeek(subWeeks(now, 1), { weekStartsOn: 0 }), 'yyyy-MM-dd')
+      const lwEnd   = format(endOfWeek(subWeeks(now, 1), { weekStartsOn: 0 }), 'yyyy-MM-dd')
       const mStart  = format(startOfMonth(now), 'yyyy-MM-dd')
       const mEnd    = format(endOfMonth(now), 'yyyy-MM-dd')
 

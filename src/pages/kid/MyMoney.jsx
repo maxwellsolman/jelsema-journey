@@ -183,8 +183,8 @@ export default function MyMoney() {
   const [showPurchaseModal, setShowPurchaseModal] = useState(false)
 
   const today    = format(new Date(), 'yyyy-MM-dd')
-  const wStart   = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-  const wEnd     = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const wStart   = format(startOfWeek(new Date(), { weekStartsOn: 0 }), 'yyyy-MM-dd')
+  const wEnd     = format(endOfWeek(new Date(), { weekStartsOn: 0 }), 'yyyy-MM-dd')
   const isSunday = new Date().getDay() === 0
 
   async function load() {

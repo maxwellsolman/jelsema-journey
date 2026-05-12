@@ -131,8 +131,8 @@ export default function KidDetail() {
 
   const today   = format(new Date(), 'yyyy-MM-dd')
   const since30 = format(subDays(new Date(), 29), 'yyyy-MM-dd')
-  const wStart  = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-  const wEnd    = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const wStart  = format(startOfWeek(new Date(), { weekStartsOn: 0 }), 'yyyy-MM-dd')
+  const wEnd    = format(endOfWeek(new Date(), { weekStartsOn: 0 }), 'yyyy-MM-dd')
 
   useEffect(() => {
     load()
