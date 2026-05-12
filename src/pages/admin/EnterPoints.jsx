@@ -8,9 +8,15 @@ import {
 } from '../../lib/points'
 import { getLevel, LEVEL_CONFIG } from '../../lib/levels'
 import { format, addDays, subDays } from 'date-fns'
-import { ChevronDown, ChevronUp, Save, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronUp, Save, CheckCircle2, ChevronLeft, ChevronRight, DollarSign } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
-import { syncLog } from '../../lib/sheets'
+import { syncLog, syncEarn } from '../../lib/sheets'
+
+const EARN_TASKS = [
+  { key: 'reading_log', label: 'Reading Log',  emoji: '📚' },
+  { key: 'planner',     label: 'Planner',      emoji: '📓' },
+  { key: 'mindfulness', label: 'Mindfulness',  emoji: '🧘' },
+]
 
 const TODAY = format(new Date(), 'yyyy-MM-dd')
 
@@ -133,6 +139,11 @@ export default function EnterPoints() {
   // Admins map for attribution display
   const [admins, setAdmins] = useState({})
 
+  // Inline earnings state
+  const [earn, setEarn]               = useState({ reading_log: false, planner: false, mindfulness: false })
+  const [earnRowId, setEarnRowId]     = useState(null)
+  const [earnSaving, setEarnSaving]   = useState(null) // task key currently saving
+
   // Load kids list once
   useEffect(() => {
     supabase.from('kids').select('id, initials').eq('is_active', true).order('initials')
@@ -157,6 +168,41 @@ export default function EnterPoints() {
         setLoggedKids(map)
       })
   }, [date])
+
+  // Load earnings for current kid+date
+  useEffect(() => {
+    if (!selectedKid || !date) return
+    supabase.from('daily_earnings').select('*')
+      .eq('kid_id', selectedKid).eq('date', date).maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setEarnRowId(data.id)
+          setEarn({ reading_log: !!data.reading_log, planner: !!data.planner, mindfulness: !!data.mindfulness })
+        } else {
+          setEarnRowId(null)
+          setEarn({ reading_log: false, planner: false, mindfulness: false })
+        }
+      })
+  }, [selectedKid, date])
+
+  async function toggleEarn(taskKey) {
+    if (!selectedKid) return
+    const next = { ...earn, [taskKey]: !earn[taskKey] }
+    setEarn(next)
+    setEarnSaving(taskKey)
+    const total = EARN_TASKS.reduce((s, t) => s + (next[t.key] ? 1 : 0), 0)
+    const payload = { kid_id: selectedKid, date, ...next, total_earned: total }
+    let rowId = earnRowId
+    if (rowId) {
+      await supabase.from('daily_earnings').update(payload).eq('id', rowId)
+    } else {
+      const { data } = await supabase.from('daily_earnings').insert(payload).select('id').single()
+      rowId = data?.id || null
+      setEarnRowId(rowId)
+    }
+    syncEarn({ ...payload, id: rowId, kid_initials: kids.find(k => k.id === selectedKid)?.initials || '' })
+    setEarnSaving(null)
+  }
 
   // Load existing log when kid+date changes
   useEffect(() => {
@@ -350,7 +396,8 @@ export default function EnterPoints() {
 
           {!selectedKid && (
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center">
-              <div className="text-3xl mb-3">👆</div>
+              <div className="text-3xl mb-3 md:hidden">👆</div>
+              <div className="text-3xl mb-3 hidden md:block">👉</div>
               <div className="font-bold text-slate-700 mb-1">Select a youth to get started</div>
               <div className="text-sm text-slate-400 md:hidden">Tap a name in the strip above</div>
               <div className="text-sm text-slate-400 hidden md:block">Pick a name from the panel on the right</div>
@@ -384,6 +431,43 @@ export default function EnterPoints() {
                 </div>
                 <div className={`px-4 py-2 rounded-xl ${cfg.badgeBg} ${cfg.badgeText} font-bold text-lg`}>
                   {cfg.emoji} {cfg.label}
+                </div>
+              </div>
+
+              {/* Inline daily earnings — saves to daily_earnings */}
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold text-slate-700 text-sm flex items-center gap-1.5">
+                    <DollarSign size={14} className="text-emerald-500" /> Allowance Tasks
+                  </h3>
+                  <span className="text-xs text-emerald-600 font-semibold">
+                    ${EARN_TASKS.reduce((s, t) => s + (earn[t.key] ? 1 : 0), 0)}.00 / $3.00
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {EARN_TASKS.map(t => {
+                    const checked = earn[t.key]
+                    const saving  = earnSaving === t.key
+                    return (
+                      <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => toggleEarn(t.key)}
+                        disabled={saving}
+                        className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl border transition-all text-xs font-semibold ${
+                          checked
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                            : 'bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100'
+                        } disabled:opacity-50`}
+                      >
+                        <span className="text-xl">{t.emoji}</span>
+                        <span>{t.label}</span>
+                        <span className={`text-[10px] ${checked ? 'text-emerald-600' : 'text-slate-400'}`}>
+                          {checked ? '+$1.00' : '$0.00'}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 

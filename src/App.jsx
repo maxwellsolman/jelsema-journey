@@ -15,6 +15,7 @@ import KidOfWeek      from './pages/admin/KidOfWeek'
 import ICanTeen       from './pages/admin/iCanTeen'
 import Reports        from './pages/admin/Reports'
 import ManageKids     from './pages/admin/ManageKids'
+import ManageAdmins   from './pages/admin/ManageAdmins'
 import KidDetail      from './pages/admin/KidDetail'
 import HowItWorks    from './pages/admin/HowItWorks'
 
@@ -70,6 +71,7 @@ function AppRoutes() {
         <Route path="canteen"   element={<ICanTeen />} />
         <Route path="reports"   element={<Reports />} />
         <Route path="kids"      element={<ManageKids />} />
+        <Route path="staff"     element={<ManageAdmins />} />
         <Route path="kid/:kidId" element={<KidDetail />} />
         <Route path="howto"     element={<HowItWorks />} />
       </Route>

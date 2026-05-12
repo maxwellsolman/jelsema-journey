@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
   LayoutDashboard, ClipboardList, DollarSign, AlertTriangle,
-  Trophy, ShoppingBag, BarChart2, Users, LogOut, Menu, X, BookOpen
+  Trophy, ShoppingBag, BarChart2, Users, LogOut, Menu, X, BookOpen, Shield
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -24,18 +24,20 @@ const NAV_GROUPS = [
       { to: '/admin/winner',  label: 'Kid of the Month', icon: Trophy },
       { to: '/admin/reports', label: 'Reports',         icon: BarChart2 },
       { to: '/admin/kids',    label: 'Manage Kids',     icon: Users },
+      { to: '/admin/staff',   label: 'Manage Staff',    icon: Shield, superOnly: true },
       { to: '/admin/howto',   label: 'How It Works',    icon: BookOpen },
     ],
   },
 ]
 
-function NavGroup({ group, onNavigate, size = 17 }) {
+function NavGroup({ group, onNavigate, size = 17, isSuper }) {
+  const items = group.items.filter(it => !it.superOnly || isSuper)
   return (
     <div>
       <div className="px-3 pt-4 pb-1.5 text-xs font-bold text-slate-500 uppercase tracking-widest">
         {group.label}
       </div>
-      {group.items.map(({ to, label, icon: Icon, end }) => (
+      {items.map(({ to, label, icon: Icon, end }) => (
         <NavLink
           key={to}
           to={to}
@@ -81,7 +83,7 @@ export default function AdminLayout() {
 
         <nav className="flex-1 overflow-y-auto pb-3 px-2 space-y-0.5">
           {NAV_GROUPS.map(group => (
-            <NavGroup key={group.label} group={group} />
+            <NavGroup key={group.label} group={group} isSuper={!!profile?.is_super_admin} />
           ))}
         </nav>
 
@@ -122,6 +124,7 @@ export default function AdminLayout() {
             <nav className="flex-1 overflow-y-auto pb-3 px-2 space-y-0.5">
               {NAV_GROUPS.map(group => (
                 <NavGroup key={group.label} group={group} size={18}
+                  isSuper={!!profile?.is_super_admin}
                   onNavigate={() => setMobileOpen(false)} />
               ))}
             </nav>

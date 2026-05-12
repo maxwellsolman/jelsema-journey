@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { format, addHours } from 'date-fns'
-import { UserPlus, UserX, X, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
+import { UserPlus, UserX, X, CheckCircle2, ChevronDown, ChevronUp, Pencil, KeyRound } from 'lucide-react'
 import { syncKid } from '../../lib/sheets'
+import { resetPassword, updateEmail, birthdayToPassword as bdToPw } from '../../lib/manageUser'
 
 function Modal({ title, onClose, children }) {
   return (
@@ -37,6 +38,11 @@ export default function ManageKids() {
   const [showDischarged, setShowDischarged] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null) // kid to confirm delete
   const [deleteTyped, setDeleteTyped]     = useState('')
+  const [editKid, setEditKid]             = useState(null) // kid being edited
+  const [resetKid, setResetKid]           = useState(null) // kid whose password is being reset
+  const [resetPw, setResetPw]             = useState('')
+  const [resetMsg, setResetMsg]           = useState('')
+  const [resetting, setResetting]         = useState(false)
 
   const [initials, setInitials]               = useState('')
   const [displayName, setDisplayName]         = useState('')
@@ -48,6 +54,11 @@ export default function ManageKids() {
   const [originalIntake, setOriginalIntake]   = useState('')
   const [priorNotes, setPriorNotes]           = useState('')
   const [error, setError]                     = useState('')
+
+  // Edit-kid form state (separate from Add)
+  const [editForm, setEditForm] = useState(null)
+  const [editError, setEditError] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
 
   function resetForm() {
     setInitials(''); setDisplayName('')
@@ -135,6 +146,87 @@ export default function ManageKids() {
     if (!confirm(`Discharge ${kid.initials}? They'll be hidden from the dashboard but their history is preserved.`)) return
     await supabase.from('kids').update({ is_active: false }).eq('id', kid.id)
     setSaved(v => !v)
+  }
+
+  function openEdit(kid) {
+    setEditForm({
+      id: kid.id,
+      user_id: kid.user_id,
+      initials: kid.initials,
+      originalInitials: kid.initials,
+      display_name: kid.display_name || '',
+      birthday: '', // we don't store it directly — admin re-enters if changing password
+      intake_date: kid.intake_date || '',
+      original_intake_date: kid.original_intake_date || '',
+      is_existing: !!kid.is_existing,
+      prior_notes: kid.prior_notes || '',
+      opening_points: kid.opening_points ?? 0,
+      opening_dollars: kid.opening_dollars ?? 0,
+    })
+    setEditError('')
+  }
+
+  async function handleEditSave() {
+    const f = editForm
+    if (!f.initials) { setEditError('Initials are required.'); return }
+    setEditSaving(true); setEditError('')
+
+    // If initials changed, update the auth email so login still works
+    if (f.initials.toUpperCase() !== f.originalInitials.toUpperCase() && f.user_id) {
+      try {
+        await updateEmail({
+          user_id:   f.user_id,
+          new_email: `${f.initials.trim().toLowerCase()}@jelsema.app`,
+        })
+      } catch (err) {
+        setEditError(`Couldn't change login: ${err.message}`)
+        setEditSaving(false)
+        return
+      }
+    }
+
+    // If a new birthday was entered, reset password to it
+    if (f.birthday && f.user_id) {
+      try {
+        await resetPassword({ user_id: f.user_id, new_password: bdToPw(f.birthday) })
+      } catch (err) {
+        setEditError(`Couldn't reset password: ${err.message}`)
+        setEditSaving(false)
+        return
+      }
+    }
+
+    const payload = {
+      initials:        f.initials.toUpperCase(),
+      display_name:    f.display_name || f.initials.toUpperCase(),
+      intake_date:     f.intake_date || null,
+      is_existing:     f.is_existing,
+      original_intake_date: f.is_existing && f.original_intake_date ? f.original_intake_date : null,
+      prior_notes:     f.is_existing ? (f.prior_notes || null) : null,
+      opening_points:  parseInt(f.opening_points) || 0,
+      opening_dollars: parseFloat(f.opening_dollars) || 0,
+    }
+    const { error: updErr } = await supabase.from('kids').update(payload).eq('id', f.id)
+    setEditSaving(false)
+    if (updErr) { setEditError(updErr.message); return }
+
+    syncKid({ id: f.id, initials: payload.initials, display_name: payload.display_name, intake_date: payload.intake_date, is_active: true })
+    setEditForm(null)
+    setSaved(v => !v)
+  }
+
+  async function handleResetKidPassword() {
+    if (!resetPw) return
+    setResetting(true); setResetMsg('')
+    try {
+      await resetPassword({ user_id: resetKid.user_id, new_password: resetPw })
+      setResetMsg('Password updated. Tell them the new one.')
+      setTimeout(() => { setResetKid(null); setResetPw(''); setResetMsg('') }, 1800)
+    } catch (err) {
+      setResetMsg(`Error: ${err.message}`)
+    } finally {
+      setResetting(false)
+    }
   }
 
   async function handleReactivate(kid) {
@@ -244,9 +336,19 @@ export default function ManageKids() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => openEdit(kid)}
+                title="Edit info"
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors text-xs font-semibold border border-transparent hover:border-blue-100">
+                <Pencil size={14} /> Edit
+              </button>
+              <button onClick={() => { setResetKid(kid); setResetPw(''); setResetMsg('') }}
+                title="Reset password"
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 transition-colors text-xs font-semibold border border-transparent hover:border-indigo-100">
+                <KeyRound size={14} />
+              </button>
               <button onClick={() => handleDischarge(kid)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-slate-400 hover:text-orange-500 hover:bg-orange-50 transition-colors text-xs font-semibold border border-transparent hover:border-orange-100">
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-slate-400 hover:text-orange-500 hover:bg-orange-50 transition-colors text-xs font-semibold border border-transparent hover:border-orange-100">
                 <UserX size={14} />
                 Discharge
               </button>
@@ -411,6 +513,122 @@ export default function ManageKids() {
             <button onClick={handleAdd} disabled={saving || !initials || !birthday}
               className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm transition-colors disabled:opacity-50">
               {saving ? 'Creating account…' : 'Add Youth'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit kid modal */}
+      {editForm && (
+        <Modal title={`Edit ${editForm.originalInitials}`} onClose={() => setEditForm(null)}>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Initials (2–4 letters)</label>
+                <input value={editForm.initials} maxLength={4}
+                  onChange={e => setEditForm(f => ({ ...f, initials: e.target.value.toUpperCase() }))}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm uppercase font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                <p className="text-xs text-slate-400 mt-1">Changing initials updates their login username.</p>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Display Name</label>
+                <input value={editForm.display_name}
+                  onChange={e => setEditForm(f => ({ ...f, display_name: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">
+                Change Birthday (optional — also resets password)
+              </label>
+              <input type="date" value={editForm.birthday}
+                onChange={e => setEditForm(f => ({ ...f, birthday: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              {editForm.birthday && (
+                <p className="text-xs text-emerald-600 mt-1 font-medium">
+                  New password will be <strong>{bdToPw(editForm.birthday)}</strong>
+                </p>
+              )}
+              <p className="text-xs text-slate-400 mt-1">Leave blank to keep the current password.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">Intake Date</label>
+              <input type="date" value={editForm.intake_date}
+                onChange={e => setEditForm(f => ({ ...f, intake_date: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+            </div>
+
+            <label className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl border border-amber-100 bg-amber-50 cursor-pointer">
+              <input type="checkbox" checked={editForm.is_existing}
+                onChange={e => setEditForm(f => ({ ...f, is_existing: e.target.checked }))}
+                className="mt-0.5 w-4 h-4 accent-amber-500" />
+              <div className="text-xs text-amber-800">
+                <div className="font-bold">Existing youth (from paper system)</div>
+              </div>
+            </label>
+
+            {editForm.is_existing && (
+              <div className="space-y-3 px-3 py-3 rounded-xl border border-amber-100 bg-amber-50/40">
+                <div>
+                  <label className="block text-xs font-semibold text-amber-800 mb-1.5">Original Intake Date</label>
+                  <input type="date" value={editForm.original_intake_date}
+                    onChange={e => setEditForm(f => ({ ...f, original_intake_date: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl border border-amber-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-amber-800 mb-1.5">Prior Notes</label>
+                  <textarea rows={2} value={editForm.prior_notes}
+                    onChange={e => setEditForm(f => ({ ...f, prior_notes: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl border border-amber-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Opening Points</label>
+                <input type="number" min="0" value={editForm.opening_points}
+                  onChange={e => setEditForm(f => ({ ...f, opening_points: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Opening Dollars</label>
+                <input type="number" min="0" step="0.01" value={editForm.opening_dollars}
+                  onChange={e => setEditForm(f => ({ ...f, opening_dollars: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+              </div>
+            </div>
+
+            {editError && <div className="bg-red-50 text-red-600 text-xs px-3 py-2 rounded-lg border border-red-100">{editError}</div>}
+
+            <button onClick={handleEditSave} disabled={editSaving}
+              className="w-full py-3 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold text-sm disabled:opacity-50">
+              {editSaving ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Reset kid password modal */}
+      {resetKid && (
+        <Modal title={`Reset password for ${resetKid.initials}`} onClose={() => setResetKid(null)}>
+          <div className="space-y-4">
+            <div className="text-sm text-slate-600">
+              Enter any new password (typically their birthday like <span className="font-mono text-slate-800">11182001</span>).
+            </div>
+            <input type="text" value={resetPw} onChange={e => setResetPw(e.target.value)} autoFocus
+              placeholder="New password"
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            {resetMsg && (
+              <div className={`text-xs px-3 py-2 rounded-lg ${resetMsg.startsWith('Error') ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+                {resetMsg}
+              </div>
+            )}
+            <button onClick={handleResetKidPassword} disabled={resetting || !resetPw || resetPw.length < 6}
+              className="w-full py-3 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm disabled:opacity-50">
+              {resetting ? 'Saving…' : 'Set New Password'}
             </button>
           </div>
         </Modal>

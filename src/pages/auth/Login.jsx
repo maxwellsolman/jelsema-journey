@@ -4,16 +4,16 @@ import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { Eye, EyeOff } from 'lucide-react'
 
-// Kids log in with initials — we convert to a fake email internally
-function toKidEmail(initials) {
-  return `${initials.trim().toLowerCase()}@jelsema.app`
-}
+// Kids log in with initials — `@jelsema.app`. Staff with initials — `@jelsema.staff`.
+function toKidEmail(initials)   { return `${initials.trim().toLowerCase()}@jelsema.app` }
+function toStaffEmail(initials) { return `${initials.trim().toLowerCase()}@jelsema.staff` }
 
-// If input has no @ and is short (2-4 chars), treat as kid initials
-function resolveEmail(input) {
+// Returns the list of candidate emails to try in order.
+function resolveEmails(input) {
   const trimmed = input.trim()
-  if (trimmed.includes('@')) return trimmed
-  return toKidEmail(trimmed)
+  if (trimmed.includes('@')) return [trimmed]
+  // Try staff first, then kid — staff are far fewer and typically not initials-only collisions
+  return [toStaffEmail(trimmed), toKidEmail(trimmed)]
 }
 
 export default function Login() {
@@ -38,19 +38,25 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const email = resolveEmail(username)
-    const { error } = await signIn(email, password)
+    const candidates = resolveEmails(username)
+    let lastError = null
+    for (const email of candidates) {
+      const { error } = await signIn(email, password)
+      if (!error) { setLoading(false); return }
+      lastError = error
+    }
     setLoading(false)
-    if (error) setError('Incorrect username or password. Try again.')
+    if (lastError) setError('Incorrect username or password. Try again.')
   }
 
   async function handleForgot(e) {
     e.preventDefault()
     setResetLoading(true)
-    const email = resolveEmail(username)
-    await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
+    for (const email of resolveEmails(username)) {
+      await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+    }
     setResetLoading(false)
     setResetSent(true)
   }
