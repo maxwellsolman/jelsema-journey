@@ -127,12 +127,6 @@ export default function ICanTeen() {
         </div>
       </div>
 
-      {!isSunday && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
-          ⚠️ The Canteen Store is only open on Sundays. You can still log redemptions, but kids won't see the store until Sunday.
-        </div>
-      )}
-
       {roleModels.length > 0 && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm">
           <div className="font-semibold text-emerald-700 mb-1">🏆 Role Models eligible today:</div>

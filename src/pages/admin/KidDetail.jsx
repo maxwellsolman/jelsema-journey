@@ -66,6 +66,115 @@ function LogPurchaseModal({ kidInitials, onClose, onSave }) {
   )
 }
 
+function TimelineTab({ kid, dailyLogs, redemptions, walletTx, notes }) {
+  // Build a unified event list
+  const events = []
+
+  // Intake / onboard
+  if (kid?.intake_date) {
+    events.push({
+      ts:    new Date(kid.intake_date + 'T08:00:00').toISOString(),
+      kind:  'onboard',
+      title: kid.is_existing ? 'Migrated from paper system' : 'Joined the program',
+      detail: format(new Date(kid.intake_date + 'T12:00:00'), 'MMMM d, yyyy'),
+    })
+  }
+
+  // Daily logs — one event per day with the result
+  dailyLogs?.forEach(l => {
+    const ts = new Date(l.date + 'T18:00:00').toISOString() // pin to end of day for ordering
+    const lv = getLevel(l.total_pts)
+    const cfg = LEVEL_CONFIG[lv]
+    events.push({
+      ts,
+      kind:  'daily',
+      title: `${cfg.emoji} ${cfg.label} day — ${l.total_pts} pts`,
+      detail: `AM ${l.am_pts || 0} · PM ${l.pm_pts || 0} · OV ${l.ov_pts || 0}`,
+      sub:   l.staff_notes || l.positive_experiences,
+    })
+    if (l.minor_infractions > 0 || l.major_infractions > 0) {
+      const parts = []
+      if (l.minor_infractions > 0) parts.push(`${l.minor_infractions}× Minor`)
+      if (l.major_infractions > 0) parts.push(`${l.major_infractions}× Major`)
+      events.push({
+        ts:    new Date(l.date + 'T18:30:00').toISOString(),
+        kind:  'infraction',
+        title: `⚠️ ${parts.join(' + ')} infraction`,
+        detail: format(new Date(l.date + 'T12:00:00'), 'EEE, MMM d'),
+        sub:   l.staff_notes,
+      })
+    }
+  })
+
+  // Canteen redemptions
+  redemptions?.forEach(r => {
+    events.push({
+      ts:    r.redeemed_at,
+      kind:  'canteen',
+      title: `🛍️ Canteen — ${r.points_redeemed} pts`,
+      detail: format(new Date(r.redeemed_at), 'EEE, MMM d'),
+      sub:   r.notes,
+    })
+  })
+
+  // Wallet purchases
+  walletTx?.forEach(w => {
+    events.push({
+      ts:    new Date(w.date + 'T15:00:00').toISOString(),
+      kind:  'wallet',
+      title: `💵 Purchase — $${parseFloat(w.amount).toFixed(2)}`,
+      detail: format(new Date(w.date + 'T12:00:00'), 'EEE, MMM d'),
+      sub:   w.description,
+    })
+  })
+
+  // Staff notes
+  notes?.forEach(n => {
+    events.push({
+      ts:    n.created_at,
+      kind:  'note',
+      title: `📝 Note from ${n.admin_name || 'Staff'}`,
+      detail: format(new Date(n.created_at), 'EEE, MMM d · h:mma').toLowerCase(),
+      sub:   n.body,
+    })
+  })
+
+  events.sort((a, b) => new Date(b.ts) - new Date(a.ts))
+
+  const KIND_COLORS = {
+    daily:      'border-emerald-200 bg-emerald-50',
+    infraction: 'border-red-200 bg-red-50',
+    canteen:    'border-amber-200 bg-amber-50',
+    wallet:     'border-blue-200 bg-blue-50',
+    note:       'border-slate-200 bg-slate-50',
+    onboard:    'border-purple-200 bg-purple-50',
+  }
+
+  if (events.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center text-sm text-slate-400">
+        Nothing logged yet.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {events.map((e, i) => (
+        <div key={i} className={`rounded-2xl border px-4 py-3 ${KIND_COLORS[e.kind] || 'border-slate-200 bg-white'}`}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="font-semibold text-slate-800 text-sm">{e.title}</div>
+            <div className="text-xs text-slate-500 shrink-0">{e.detail}</div>
+          </div>
+          {e.sub && (
+            <div className="text-xs text-slate-600 mt-1 leading-relaxed">{e.sub}</div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function BehaviorRow({ label, earned }) {
   return (
     <div className={`flex items-center gap-2 text-xs py-0.5 ${earned ? 'text-emerald-700' : 'text-slate-400'}`}>
@@ -180,8 +289,10 @@ export default function KidDetail() {
   const [postingNote, setPostingNote] = useState(false)
   const [noteError, setNoteError]   = useState('')
   const [loading, setLoading]       = useState(true)
-  const [tab, setTab]               = useState('overview') // overview | history | notes
+  const [tab, setTab]               = useState('overview') // overview | timeline | history | notes
   const [showPurchaseModal, setShowPurchaseModal] = useState(false)
+  const [allRedemptions, setAllRedemptions] = useState([])
+  const [walletTx, setWalletTx]             = useState([])
 
   async function handleLogPurchase({ amount, description, date: purchaseDate }) {
     const { error } = await supabase.from('wallet_transactions').insert({
@@ -226,6 +337,14 @@ export default function KidDetail() {
     setNotes(notesData || [])
     setWeekRedemptions(redemptions || [])
     setLoading(false)
+
+    // Fetch all-time canteen redemptions + wallet purchases for the timeline tab
+    const [{ data: allR }, { data: allW }] = await Promise.all([
+      supabase.from('canteen_redemptions').select('*').eq('kid_id', kidId).order('redeemed_at', { ascending: false }),
+      supabase.from('wallet_transactions').select('*').eq('kid_id', kidId).order('date', { ascending: false }),
+    ])
+    setAllRedemptions(allR || [])
+    setWalletTx(allW || [])
   }
 
   async function handlePostNote() {
@@ -390,6 +509,7 @@ export default function KidDetail() {
       <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl">
         {[
           { key: 'overview', label: 'Overview' },
+          { key: 'timeline', label: 'Timeline' },
           { key: 'history',  label: 'History' },
           { key: 'notes',    label: `Notes ${notes.length > 0 ? `(${notes.length})` : ''}` },
         ].map(t => (
@@ -461,6 +581,16 @@ export default function KidDetail() {
       )}
 
       {/* ── HISTORY TAB ── */}
+      {tab === 'timeline' && (
+        <TimelineTab
+          kid={kid}
+          dailyLogs={recentLogs}
+          redemptions={allRedemptions}
+          walletTx={walletTx}
+          notes={notes}
+        />
+      )}
+
       {tab === 'history' && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="px-5 py-3 border-b border-slate-50 bg-slate-50/60">
