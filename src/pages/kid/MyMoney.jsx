@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
-import { format, startOfWeek, endOfWeek, addDays } from 'date-fns'
+import { format, startOfWeek, endOfWeek, addDays, subWeeks } from 'date-fns'
 import { getLevel, LEVELS } from '../../lib/levels'
 import { X, ShoppingBag, Plus } from 'lucide-react'
 import { syncWallet } from '../../lib/sheets'
@@ -177,14 +177,19 @@ export default function MyMoney() {
   const [totalEarned, setTotalEarned]       = useState(0)
   const [totalSpent, setTotalSpent]         = useState(0)
   const [weekEarned, setWeekEarned]         = useState(0)
+  const [lastWeekEarned, setLastWeekEarned] = useState(0)
+  const [lastPaidOutAt, setLastPaidOutAt]   = useState(null)
+  const [lastPaidOutAmount, setLastPaidOutAmount] = useState(null)
   const [weekPtsBalance, setWeekPtsBalance] = useState(0)
   const [todayLevel, setTodayLevel]         = useState(null)
   const [loading, setLoading]               = useState(true)
   const [showPurchaseModal, setShowPurchaseModal] = useState(false)
 
   const today    = format(new Date(), 'yyyy-MM-dd')
-  const wStart   = format(startOfWeek(new Date(), { weekStartsOn: 0 }), 'yyyy-MM-dd')
-  const wEnd     = format(endOfWeek(new Date(), { weekStartsOn: 0 }), 'yyyy-MM-dd')
+  const wStart   = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const wEnd     = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const lwStart  = format(startOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const lwEnd    = format(endOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const isSunday = new Date().getDay() === 0
 
   async function load() {
@@ -192,9 +197,12 @@ export default function MyMoney() {
 
     // Carry-over balances from paper system
     const { data: kidRow } = await supabase.from('kids')
-      .select('opening_points, opening_dollars').eq('id', profile.id).maybeSingle()
+      .select('opening_points, opening_dollars, last_paid_out_at, last_paid_out_amount')
+      .eq('id', profile.id).maybeSingle()
     const openDollars = parseFloat(kidRow?.opening_dollars) || 0
     const openPoints  = parseInt(kidRow?.opening_points)    || 0
+    setLastPaidOutAt(kidRow?.last_paid_out_at || null)
+    setLastPaidOutAmount(kidRow?.last_paid_out_amount ?? null)
 
     // All-time earnings (cumulative balance) — includes opening dollars
     const { data: allEarnsData } = await supabase.from('daily_earnings')
@@ -208,6 +216,10 @@ export default function MyMoney() {
     const weekData = allData.filter(e => e.date >= wStart && e.date <= wEnd)
     setWeekEarnings(weekData)
     setWeekEarned(weekData.reduce((s, e) => s + (e.total_earned || 0), 0))
+
+    // Last week's total
+    const lastWeekData = allData.filter(e => e.date >= lwStart && e.date <= lwEnd)
+    setLastWeekEarned(lastWeekData.reduce((s, e) => s + (e.total_earned || 0), 0))
 
     // All-time wallet transactions (spending)
     const { data: txData } = await supabase.from('wallet_transactions')
@@ -326,6 +338,56 @@ export default function MyMoney() {
             </div>
             <div style={{ fontSize:36 }}>{canteenOpen ? '🛍️' : '🏪'}</div>
           </div>
+        </div>
+      </div>
+
+      {/* Weekly earnings + payout summary */}
+      <div className="slide-up grid grid-cols-3 gap-3" style={{ '--delay':'90ms' }}>
+        <div className="duo-card p-3">
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:10, color:'var(--duo-text-lt)', textTransform:'uppercase', letterSpacing:'0.05em' }}>
+            This Week
+          </div>
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:22, color:'#22C55E', lineHeight:1.1, marginTop:4 }}>
+            ${weekEarned.toFixed(2)}
+          </div>
+          <div style={{ fontFamily:'var(--font-body)', fontSize:10, color:'#AFAFAF', marginTop:2 }}>
+            Mon–Sun · resets Monday
+          </div>
+        </div>
+        <div className="duo-card p-3">
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:10, color:'var(--duo-text-lt)', textTransform:'uppercase', letterSpacing:'0.05em' }}>
+            Last Week
+          </div>
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:22, color:'var(--duo-text)', lineHeight:1.1, marginTop:4 }}>
+            ${lastWeekEarned.toFixed(2)}
+          </div>
+          <div style={{ fontFamily:'var(--font-body)', fontSize:10, color:'#AFAFAF', marginTop:2 }}>
+            {format(new Date(lwStart + 'T12:00:00'), 'MMM d')}–{format(new Date(lwEnd + 'T12:00:00'), 'MMM d')}
+          </div>
+        </div>
+        <div className="duo-card p-3">
+          <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:10, color:'var(--duo-text-lt)', textTransform:'uppercase', letterSpacing:'0.05em' }}>
+            Last Paid Out
+          </div>
+          {lastPaidOutAt ? (
+            <>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:22, color:'#1CB0F6', lineHeight:1.1, marginTop:4 }}>
+                ${parseFloat(lastPaidOutAmount || 0).toFixed(2)}
+              </div>
+              <div style={{ fontFamily:'var(--font-body)', fontSize:10, color:'#AFAFAF', marginTop:2 }}>
+                {format(new Date(lastPaidOutAt), 'MMM d, yyyy')}
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:22, color:'#AFAFAF', lineHeight:1.1, marginTop:4 }}>
+                —
+              </div>
+              <div style={{ fontFamily:'var(--font-body)', fontSize:10, color:'#AFAFAF', marginTop:2 }}>
+                Not paid out yet
+              </div>
+            </>
+          )}
         </div>
       </div>
 

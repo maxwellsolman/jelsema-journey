@@ -49,10 +49,10 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
 
   const today  = format(new Date(), 'yyyy-MM-dd')
-  const wStart = format(startOfWeek(new Date(), { weekStartsOn: 0 }), 'yyyy-MM-dd')
-  const wEnd   = format(endOfWeek(new Date(), { weekStartsOn: 0 }), 'yyyy-MM-dd')
-  const lwStart = format(startOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 0 }), 'yyyy-MM-dd')
-  const lwEnd   = format(endOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 0 }), 'yyyy-MM-dd')
+  const wStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const wEnd   = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const lwStart = format(startOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const lwEnd   = format(endOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd')
 
   const [lastWeekPtsMap, setLastWeekPtsMap] = useState({})
   const [weekInfractions, setWeekInfractions] = useState(0)
