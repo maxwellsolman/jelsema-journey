@@ -13,10 +13,16 @@ export default function Infractions() {
   const [saved, setSaved]           = useState(false)
   const [recentLogs, setRecentLogs] = useState([])
   const [removing, setRemoving]     = useState(null) // log id being removed
+  const [admins, setAdmins]         = useState({})
 
   useEffect(() => {
     supabase.from('kids').select('id, initials').eq('is_active', true).order('initials')
       .then(({ data }) => setKids(data || []))
+    supabase.from('admins').select('id, name').then(({ data }) => {
+      const m = {}
+      data?.forEach(a => { m[a.id] = a.name })
+      setAdmins(m)
+    })
   }, [])
 
   useEffect(() => {
@@ -146,15 +152,28 @@ export default function Infractions() {
         <div>
           <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Recent (7 days) — tap to remove</h2>
           <div className="space-y-2">
-            {recentLogs.map(log => (
+            {recentLogs.map(log => {
+              const loggedBy = log.entered_by ? admins[log.entered_by] : null
+              return (
               <div key={log.id} className="bg-white rounded-2xl border border-slate-100 px-4 py-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="font-bold text-slate-800">{log.kids?.initials}</span>
                     <span className="text-slate-400 text-sm ml-2">{format(new Date(log.date + 'T12:00:00'), 'MMM d, yyyy')}</span>
+                    {loggedBy && (
+                      <span className="text-xs text-slate-500 ml-2">
+                        · by <strong className="text-slate-700">{loggedBy.split(' ')[0]}</strong>
+                      </span>
+                    )}
                   </div>
                   <span className="text-xs text-slate-400">{log.total_pts} pts after deductions</span>
                 </div>
+
+                {log.staff_notes && (
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-xs text-slate-600">
+                    <span className="font-semibold text-slate-500">Reason: </span>{log.staff_notes}
+                  </div>
+                )}
 
                 <div className="flex flex-wrap gap-2">
                   {log.minor_infractions > 0 && (
@@ -185,7 +204,8 @@ export default function Infractions() {
                   )}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}

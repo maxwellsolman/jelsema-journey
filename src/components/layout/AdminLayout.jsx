@@ -92,7 +92,9 @@ export default function AdminLayout() {
             <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-xs font-bold">
               {profile?.name?.[0]?.toUpperCase() || 'A'}
             </div>
-            <div className="text-xs text-slate-300 truncate">{profile?.name || 'Admin'}</div>
+            <div className="text-xs text-slate-300 truncate">
+              {(profile?.name?.split(' ')[0] || profile?.initials || 'Staff')} – Staff
+            </div>
           </div>
           <button
             onClick={handleSignOut}
