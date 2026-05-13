@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { format } from 'date-fns'
 import { AlertTriangle, ShieldAlert, CheckCircle2, Undo2 } from 'lucide-react'
-import { MINOR_DEDUCTION, MAJOR_DEDUCTION } from '../../lib/points'
+import { MINOR_DEDUCTION, MAJOR_DEDUCTION, MINOR_FREEZE_HOURS, MAJOR_FREEZE_HOURS } from '../../lib/points'
 
 export default function Infractions() {
   const [kids, setKids]             = useState([])
@@ -47,7 +47,7 @@ export default function Infractions() {
       .from('daily_logs').select('*').eq('kid_id', selectedKid).eq('date', date).single()
 
     const deduction   = type === 'minor' ? MINOR_DEDUCTION : MAJOR_DEDUCTION
-    const freezeHours = type === 'minor' ? 24 : 48
+    const freezeHours = type === 'minor' ? MINOR_FREEZE_HOURS : MAJOR_FREEZE_HOURS
     const freeze = new Date(date + 'T12:00:00')
     freeze.setHours(freeze.getHours() + freezeHours)
 
@@ -115,7 +115,7 @@ export default function Infractions() {
           className={`p-4 rounded-2xl border-2 text-left transition-all ${type === 'minor' ? 'border-orange-400 bg-orange-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
           <AlertTriangle className={type === 'minor' ? 'text-orange-500' : 'text-slate-300'} size={24} />
           <div className={`font-bold mt-2 ${type === 'minor' ? 'text-orange-700' : 'text-slate-600'}`}>Minor</div>
-          <div className="text-xs text-slate-400 mt-0.5">−{MINOR_DEDUCTION} pts · 24hr freeze</div>
+          <div className="text-xs text-slate-400 mt-0.5">−{MINOR_DEDUCTION} pts · 48hr freeze</div>
         </button>
         <button onClick={() => setType('major')}
           className={`p-4 rounded-2xl border-2 text-left transition-all ${type === 'major' ? 'border-red-400 bg-red-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>

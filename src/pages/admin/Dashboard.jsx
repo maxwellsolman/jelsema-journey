@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { getLevel, LEVEL_CONFIG } from '../../lib/levels'
 import { isPrivilegeFrozen } from '../../lib/points'
-import { format, startOfWeek, endOfWeek } from 'date-fns'
+import { format, startOfWeek, endOfWeek, subDays } from 'date-fns'
 import { ShieldAlert, Pin, ArrowRight, Trophy, TrendingUp, AlertTriangle } from 'lucide-react'
 import { subWeeks } from 'date-fns'
 
@@ -44,11 +44,13 @@ export default function AdminDashboard() {
   const navigate = useNavigate()
   const [kids, setKids]       = useState([])
   const [logs, setLogs]       = useState({})       // by kid_id, today
+  const [yesterdayLogs, setYesterdayLogs] = useState({}) // by kid_id, yesterday
   const [weekPtsMap, setWeekPtsMap] = useState({})
   const [pinnedNotesMap, setPinnedNotesMap] = useState({})
   const [loading, setLoading] = useState(true)
 
-  const today  = format(new Date(), 'yyyy-MM-dd')
+  const today     = format(new Date(), 'yyyy-MM-dd')
+  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd')
   const wStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const wEnd   = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const lwStart = format(startOfWeek(subWeeks(new Date(), 1), { weekStartsOn: 1 }), 'yyyy-MM-dd')
@@ -67,12 +69,14 @@ export default function AdminDashboard() {
 
       const [
         { data: logsData },
+        { data: yLogsData },
         { data: weekLogs },
         { data: lastWeekLogs },
         { data: pinnedNotes },
         { data: weekInfRows },
       ] = await Promise.all([
         supabase.from('daily_logs').select('*').eq('date', today),
+        supabase.from('daily_logs').select('*').eq('date', yesterday),
         supabase.from('daily_logs').select('kid_id, total_pts').gte('date', wStart).lte('date', wEnd),
         supabase.from('daily_logs').select('kid_id, total_pts').gte('date', lwStart).lte('date', lwEnd),
         supabase.from('kid_notes').select('kid_id, body').eq('pinned', true),
@@ -83,6 +87,9 @@ export default function AdminDashboard() {
 
       const logsMap = {}
       logsData?.forEach(l => { logsMap[l.kid_id] = l })
+
+      const yLogsMap = {}
+      yLogsData?.forEach(l => { yLogsMap[l.kid_id] = l })
 
       const wPts = {}
       weekLogs?.forEach(l => { wPts[l.kid_id] = (wPts[l.kid_id] || 0) + (l.total_pts || 0) })
@@ -102,6 +109,7 @@ export default function AdminDashboard() {
 
       setKids(kidsData || [])
       setLogs(logsMap)
+      setYesterdayLogs(yLogsMap)
       setWeekPtsMap(wPts)
       setLastWeekPtsMap(lwPts)
       setWeekInfractions(infCount)
@@ -253,7 +261,11 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {kids.map(kid => {
               const log      = logs[kid.id]
-              const total    = log?.total_pts ?? null
+              const yLog     = yesterdayLogs[kid.id]
+              // Level reflects yesterday's standing unless an infraction was logged today.
+              const todayHasInfraction = (log?.minor_infractions || 0) > 0 || (log?.major_infractions || 0) > 0
+              const levelLog = todayHasInfraction ? log : (yLog || log)
+              const total    = levelLog?.total_pts ?? null
               const level    = total != null ? getLevel(total, isOrientation(kid)) : null
               const cfg      = level ? LEVEL_CONFIG[level] : null
               const isFrozen = isPrivilegeFrozen(log?.privilege_freeze_until)

@@ -281,6 +281,7 @@ export default function KidDetail() {
 
   const [kid, setKid]               = useState(null)
   const [todayLog, setTodayLog]     = useState(null)
+  const [yesterdayLog, setYesterdayLog] = useState(null)
   const [recentLogs, setRecentLogs] = useState([])
   const [weekEarnings, setWeekEarnings] = useState([])
   const [weekRedemptions, setWeekRedemptions] = useState([])
@@ -305,8 +306,9 @@ export default function KidDetail() {
     return { error }
   }
 
-  const today   = format(new Date(), 'yyyy-MM-dd')
-  const since30 = format(subDays(new Date(), 29), 'yyyy-MM-dd')
+  const today     = format(new Date(), 'yyyy-MM-dd')
+  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd')
+  const since30   = format(subDays(new Date(), 29), 'yyyy-MM-dd')
   const wStart  = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const wEnd    = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
 
@@ -332,6 +334,7 @@ export default function KidDetail() {
     ])
     setKid(kidData)
     setTodayLog(logToday || null)
+    setYesterdayLog((logs || []).find(l => l.date === yesterday) || null)
     setRecentLogs(logs || [])
     setWeekEarnings(earns || [])
     setNotes(notesData || [])
@@ -388,7 +391,12 @@ export default function KidDetail() {
   )
   if (!kid) return <div className="p-6 text-slate-400">Youth not found.</div>
 
-  const pts       = todayLog?.total_pts ?? null
+  // Level/pts displayed in the header reflect YESTERDAY's standing, unless
+  // today has an infraction logged — then today's (post-deduction) total applies immediately.
+  const todayHasInfraction = (todayLog?.minor_infractions || 0) > 0 || (todayLog?.major_infractions || 0) > 0
+  const displayLog = todayHasInfraction ? todayLog : (yesterdayLog || todayLog)
+  const pts       = displayLog?.total_pts ?? null
+  const ptsLabel  = displayLog === todayLog ? 'pts today' : 'pts yesterday'
   const level     = pts !== null ? getLevel(pts) : null
   const cfg       = level ? LEVEL_CONFIG[level] : null
   const frozen    = isPrivilegeFrozen(todayLog?.privilege_freeze_until)
@@ -435,7 +443,7 @@ export default function KidDetail() {
             {pts !== null ? (
               <>
                 <div className={`text-5xl font-black leading-none ${cfg?.textClass || 'text-slate-800'}`}>{pts}</div>
-                <div className="text-xs text-slate-400 mt-1">pts today</div>
+                <div className="text-xs text-slate-400 mt-1">{ptsLabel}</div>
               </>
             ) : (
               <div className="text-slate-300 text-sm">No entry today</div>

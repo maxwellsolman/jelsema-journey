@@ -98,7 +98,7 @@ export default function HowItWorks() {
               <div className="font-bold text-orange-700 mb-1">⚠️ Minor Infraction</div>
               <div className="text-xs text-orange-600 space-y-0.5">
                 <div>−{MINOR_DEDUCTION} points from daily total</div>
-                <div>24-hour privilege suspension</div>
+                <div>48-hour privilege suspension</div>
               </div>
             </div>
             <div className="bg-red-50 border border-red-200 rounded-xl p-3">
@@ -128,7 +128,7 @@ export default function HowItWorks() {
 
       <Section title="Privilege Freeze">
         <p className="text-sm text-slate-600">
-          When a youth receives an infraction, their privileges are suspended for 24 hours (minor) or 48 hours (major).
+          When a youth receives an infraction, their privileges are suspended for 48 hours.
           During a freeze, a red banner will appear on their profile and on the dashboard.
           Privileges are restored automatically when the freeze period ends.
         </p>

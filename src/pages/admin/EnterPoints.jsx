@@ -513,7 +513,7 @@ export default function EnterPoints() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-orange-600 mb-1.5">⚠️ Minor (−{MINOR_DEDUCTION} pts · 24hr freeze)</label>
+                    <label className="block text-xs font-semibold text-orange-600 mb-1.5">⚠️ Minor (−{MINOR_DEDUCTION} pts · 48hr freeze)</label>
                     <div className="flex items-center gap-2">
                       <button type="button" onClick={() => setMinors(m => Math.max(0, m - 1))} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-lg font-bold flex items-center justify-center">−</button>
                       <span className="text-2xl font-bold text-slate-800 w-8 text-center">{minors}</span>

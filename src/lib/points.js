@@ -41,7 +41,7 @@ export const POINTS_PER_BEHAVIOR = 5
 export const MINOR_DEDUCTION = 20
 export const MAJOR_DEDUCTION = 40
 
-export const MINOR_FREEZE_HOURS = 24
+export const MINOR_FREEZE_HOURS = 48
 export const MAJOR_FREEZE_HOURS = 48
 
 /**
