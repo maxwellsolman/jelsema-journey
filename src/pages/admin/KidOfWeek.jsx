@@ -65,7 +65,7 @@ function KidOfMonthSetter({ kids }) {
 
   useEffect(() => {
     supabase.from('settings').select('value').eq('key', 'kid_of_month').single()
-      .then(({ data }) => { if (data?.value) { setCurrent(data.value); setMonthLabel(data.value.month_label || format(new Date(), 'MMMM yyyy')) } })
+      .then(({ data }) => { if (data?.value) setCurrent(data.value) })
   }, [saved])
 
   async function handleSave() {
