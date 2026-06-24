@@ -463,7 +463,7 @@ export default function EnterPoints() {
                         <span className="text-xl">{t.emoji}</span>
                         <span>{t.label}</span>
                         <span className={`text-[10px] ${checked ? 'text-emerald-600' : 'text-slate-400'}`}>
-                          {checked ? '+$1.00' : '$0.00'}
+                          {checked ? '+$1.00' : '$1.00'}
                         </span>
                       </button>
                     )
