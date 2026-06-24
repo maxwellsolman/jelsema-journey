@@ -1,6 +1,6 @@
 // Deno Edge Function: manage-user
 // Handles privileged auth operations for super-admins:
-//   - create_admin   { initials, name, password, birthday?, is_super_admin }
+//   - create_admin   { name, email, password, is_super_admin }
 //   - reset_password { user_id, new_password }
 //   - delete_admin   { admin_id }
 //   - update_email   { user_id, new_email }
@@ -20,8 +20,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-function staffEmail(initials: string) {
-  return `${initials.trim().toLowerCase()}@jelsema.staff`
+function isValidEmail(s: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s).trim())
 }
 
 Deno.serve(async (req) => {
@@ -55,17 +55,20 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case 'create_admin': {
-        const { initials, name, password, birthday, is_super_admin } = body
-        if (!initials || !password || !name) {
-          return json({ error: 'initials, name, password required' }, 400)
+        const { name, email, password, is_super_admin } = body
+        if (!name || !email || !password) {
+          return json({ error: 'name, email, password required' }, 400)
+        }
+        if (!isValidEmail(email)) {
+          return json({ error: 'Enter a valid email address' }, 400)
         }
         if (String(password).length < 6) {
           return json({ error: 'password must be at least 6 characters' }, 400)
         }
-        const email = staffEmail(initials)
+        const cleanEmail = String(email).trim().toLowerCase()
 
         const { data: created, error: signUpErr } = await admin.auth.admin.createUser({
-          email,
+          email: cleanEmail,
           password,
           email_confirm: true,
           user_metadata: { role: 'admin' },
@@ -75,16 +78,15 @@ Deno.serve(async (req) => {
         const { error: insertErr } = await admin.from('admins').insert({
           user_id: created.user.id,
           name,
-          initials: String(initials).toUpperCase(),
+          email: cleanEmail,
           is_super_admin: !!is_super_admin,
-          birthday: birthday || null,
         })
         if (insertErr) {
           // Roll back the auth user if the admins row failed
           await admin.auth.admin.deleteUser(created.user.id)
           return json({ error: insertErr.message }, 400)
         }
-        return json({ ok: true, user_id: created.user.id, email, password })
+        return json({ ok: true, user_id: created.user.id, email: cleanEmail, password })
       }
 
       case 'reset_password': {
@@ -120,14 +122,17 @@ Deno.serve(async (req) => {
       }
 
       case 'update_email': {
-        // Used when changing a kid's initials (their email = initials)
+        // Kids: their login email = initials@jelsema.app. Staff: their real email.
         const { user_id, new_email } = body
         if (!user_id || !new_email) return json({ error: 'user_id and new_email required' }, 400)
+        const cleanEmail = String(new_email).trim().toLowerCase()
         const { error } = await admin.auth.admin.updateUserById(user_id, {
-          email: new_email,
+          email: cleanEmail,
           email_confirm: true,
         })
         if (error) return json({ error: error.message }, 400)
+        // Keep the staff record's email column in sync (no-op for kids — no admins row)
+        await admin.from('admins').update({ email: cleanEmail }).eq('user_id', user_id)
         return json({ ok: true })
       }
 

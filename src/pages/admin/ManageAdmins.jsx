@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
-import { UserPlus, X, CheckCircle2, KeyRound, Shield, Lock } from 'lucide-react'
+import { UserPlus, X, CheckCircle2, KeyRound, Shield, Lock, Pencil } from 'lucide-react'
 import { format } from 'date-fns'
-import { createAdmin, resetPassword, deleteAdmin } from '../../lib/manageUser'
+import { createAdmin, resetPassword, deleteAdmin, updateEmail } from '../../lib/manageUser'
 
 function Modal({ title, onClose, children }) {
   return (
@@ -38,11 +38,16 @@ export default function ManageAdmins() {
   const [deleteFor, setDeleteFor] = useState(null)
   const [error, setError]   = useState('')
 
+  // Edit email
+  const [editFor, setEditFor]   = useState(null)
+  const [editEmail, setEditEmail] = useState('')
+  const [editDone, setEditDone] = useState(false)
+  const [editSaving, setEditSaving] = useState(false)
+
   // Add form
   const [name, setName]           = useState('')
-  const [initials, setInitials]   = useState('')
+  const [email, setEmail]         = useState('')
   const [password, setPassword]   = useState('')
-  const [birthday, setBirthday]   = useState('')
   const [isSuper, setIsSuper]     = useState(false)
   const [saving, setSaving]       = useState(false)
 
@@ -71,16 +76,19 @@ export default function ManageAdmins() {
   }
 
   function resetAdd() {
-    setName(''); setInitials(''); setPassword(''); setBirthday(''); setIsSuper(false); setError('')
+    setName(''); setEmail(''); setPassword(''); setIsSuper(false); setError('')
   }
 
+  const emailLooksValid = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
+
   async function handleAdd() {
-    if (!name || !initials || !password) { setError('Name, initials, and password are required.'); return }
+    if (!name || !email || !password) { setError('Name, email, and password are required.'); return }
+    if (!emailLooksValid(email)) { setError('Enter a valid email address.'); return }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return }
     setSaving(true); setError('')
     try {
-      const res = await createAdmin({ name, initials, password, birthday: birthday || null, is_super_admin: isSuper })
-      setNewCreds({ initials: initials.toUpperCase(), password: res.password })
+      const res = await createAdmin({ name, email, password, is_super_admin: isSuper })
+      setNewCreds({ email: res.email || email.trim().toLowerCase(), password: res.password })
       setShowAdd(false)
       resetAdd()
       setReload(r => r + 1)
@@ -88,6 +96,21 @@ export default function ManageAdmins() {
       setError(err.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleEditEmail() {
+    if (!emailLooksValid(editEmail)) { setError('Enter a valid email address.'); return }
+    setEditSaving(true); setError('')
+    try {
+      await updateEmail({ user_id: editFor.user_id, new_email: editEmail.trim().toLowerCase() })
+      setEditDone(true)
+      setReload(r => r + 1)
+      setTimeout(() => { setEditFor(null); setEditEmail(''); setEditDone(false) }, 1500)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -177,7 +200,7 @@ export default function ManageAdmins() {
           </div>
           <div className="text-sm text-slate-600">Share these with the staff member:</div>
           <div className="bg-white rounded-xl border border-emerald-200 p-3 space-y-1 font-mono text-sm">
-            <div><span className="text-slate-500">Username:</span> <strong>{newCreds.initials}</strong></div>
+            <div><span className="text-slate-500">Username:</span> <strong>{newCreds.email}</strong> <span className="text-slate-400 font-sans">(their email)</span></div>
             <div><span className="text-slate-500">Password:</span> <strong>{newCreds.password}</strong> <span className="text-slate-400 font-sans">(they can change it after signing in)</span></div>
           </div>
           <button onClick={() => setNewCreds(null)} className="text-xs text-slate-400 hover:underline">Dismiss</button>
@@ -189,7 +212,7 @@ export default function ManageAdmins() {
           <div key={a.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-sm shrink-0">
-                {a.initials || a.name?.[0] || '?'}
+                {a.name?.[0]?.toUpperCase() || '?'}
               </div>
               <div className="min-w-0">
                 <div className="font-bold text-slate-800 flex items-center gap-1.5">
@@ -201,13 +224,19 @@ export default function ManageAdmins() {
                   )}
                 </div>
                 <div className="text-xs text-slate-400 truncate">
-                  {a.initials && <>Login: <strong className="text-slate-600">{a.initials}</strong> · </>}
-                  {a.email}
+                  Login: <strong className="text-slate-600">{a.email || '— no email set —'}</strong>
                   {a.created_at && <span> · Added {format(new Date(a.created_at), 'MMM d, yyyy')}</span>}
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => { setEditFor(a); setEditEmail(a.email || ''); setEditDone(false); setError('') }}
+                title="Change login email"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors text-xs font-semibold border border-transparent hover:border-emerald-100"
+              >
+                <Pencil size={14} /> Email
+              </button>
               <button
                 onClick={() => { setResetFor(a); setResetPw(''); setError('') }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors text-xs font-semibold border border-transparent hover:border-blue-100"
@@ -237,18 +266,11 @@ export default function ManageAdmins() {
                 placeholder="e.g. Jane Doe"
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Initials * (2–4 letters)</label>
-                <input value={initials} onChange={e => setInitials(e.target.value.toUpperCase())} maxLength={4}
-                  placeholder="JD"
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm uppercase font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-400" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Birthday (optional)</label>
-                <input type="date" value={birthday} onChange={e => setBirthday(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">Email * (this is their login)</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="jane@example.com"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1.5">Password * (min 6 characters)</label>
@@ -265,13 +287,47 @@ export default function ManageAdmins() {
               </div>
             </label>
             <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 text-xs text-blue-700">
-              <strong>Login info:</strong> Username = <strong>{initials || 'their initials'}</strong> · Password = whatever you set above
+              <strong>Login info:</strong> Username = <strong>{email || 'their email'}</strong> · Password = whatever you set above. They can change their password after signing in.
             </div>
             {error && <div className="bg-red-50 text-red-600 text-xs px-3 py-2 rounded-lg border border-red-100">{error}</div>}
-            <button onClick={handleAdd} disabled={saving || !name || !initials || !password}
+            <button onClick={handleAdd} disabled={saving || !name || !email || !password}
               className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm disabled:opacity-50">
               {saving ? 'Creating account…' : 'Add Staff'}
             </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Edit email modal */}
+      {editFor && (
+        <Modal title={`Login email for ${editFor.name}`} onClose={() => { setEditFor(null); setError('') }}>
+          <div className="space-y-4">
+            {editDone ? (
+              <div className="text-center py-4 space-y-2">
+                <CheckCircle2 className="text-emerald-500 mx-auto" size={36} />
+                <div className="font-bold text-slate-800">Email updated</div>
+                <div className="text-xs text-slate-500">They sign in with this email now.</div>
+              </div>
+            ) : (
+              <>
+                <div className="text-sm text-slate-600">
+                  This email is their username at sign-in. Updating it changes how they log in.
+                </div>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={e => setEditEmail(e.target.value)}
+                  autoFocus
+                  placeholder="name@example.com"
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                />
+                {error && <div className="bg-red-50 text-red-600 text-xs px-3 py-2 rounded-lg border border-red-100">{error}</div>}
+                <button onClick={handleEditEmail} disabled={editSaving || !editEmail}
+                  className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm disabled:opacity-50">
+                  {editSaving ? 'Saving…' : 'Save Email'}
+                </button>
+              </>
+            )}
           </div>
         </Modal>
       )}

@@ -4,16 +4,16 @@ import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { Eye, EyeOff } from 'lucide-react'
 
-// Kids log in with initials — `@jelsema.app`. Staff with initials — `@jelsema.staff`.
-function toKidEmail(initials)   { return `${initials.trim().toLowerCase()}@jelsema.app` }
-function toStaffEmail(initials) { return `${initials.trim().toLowerCase()}@jelsema.staff` }
+// Kids log in with their initials — mapped to `<initials>@jelsema.app`.
+// Staff log in with their real email address (typed in full).
+function toKidEmail(initials) { return `${initials.trim().toLowerCase()}@jelsema.app` }
 
 // Returns the list of candidate emails to try in order.
 function resolveEmails(input) {
   const trimmed = input.trim()
-  if (trimmed.includes('@')) return [trimmed]
-  // Try staff first, then kid — staff are far fewer and typically not initials-only collisions
-  return [toStaffEmail(trimmed), toKidEmail(trimmed)]
+  // An '@' means a real email (staff) — use it as-is. Otherwise it's a kid's initials.
+  if (trimmed.includes('@')) return [trimmed.toLowerCase()]
+  return [toKidEmail(trimmed)]
 }
 
 export default function Login() {
@@ -78,16 +78,17 @@ export default function Login() {
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                    {isKidMode ? 'Your Initials' : 'Username or Email'}
+                    {isKidMode ? 'Your Initials' : 'Email or Initials'}
                   </label>
                   <input
                     type="text"
                     value={username}
                     onChange={e => setUsername(e.target.value)}
                     required
-                    autoCapitalize="characters"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 transition uppercase"
-                    placeholder="Your initials or staff email"
+                    autoCapitalize={isKidMode ? 'characters' : 'none'}
+                    autoCorrect="off"
+                    className={`w-full px-4 py-3 rounded-xl border border-slate-200 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 transition ${isKidMode ? 'uppercase' : ''}`}
+                    placeholder="Email (staff) or initials (youth)"
                   />
                   {isKidMode && (
                     <p className="text-xs text-emerald-600 mt-1 font-medium">Logging in as youth ✓</p>

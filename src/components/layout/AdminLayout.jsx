@@ -2,9 +2,10 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
   LayoutDashboard, ClipboardList, DollarSign, AlertTriangle,
-  Trophy, ShoppingBag, BarChart2, Users, LogOut, Menu, X, BookOpen, Shield
+  Trophy, ShoppingBag, BarChart2, Users, LogOut, Menu, X, BookOpen, Shield, KeyRound
 } from 'lucide-react'
 import { useState } from 'react'
+import ChangePasswordModal from '../ChangePasswordModal'
 
 const NAV_GROUPS = [
   {
@@ -63,6 +64,7 @@ export default function AdminLayout() {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [showChangePw, setShowChangePw] = useState(false)
 
   async function handleSignOut() {
     await signOut()
@@ -96,6 +98,12 @@ export default function AdminLayout() {
               {(profile?.name?.split(' ')[0] || profile?.initials || 'Staff')} – Staff
             </div>
           </div>
+          <button
+            onClick={() => setShowChangePw(true)}
+            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+          >
+            <KeyRound size={16} /> Change password
+          </button>
           <button
             onClick={handleSignOut}
             className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
@@ -132,6 +140,12 @@ export default function AdminLayout() {
             </nav>
             <div className="px-3 py-4 border-t border-slate-700">
               <button
+                onClick={() => { setShowChangePw(true); setMobileOpen(false) }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg"
+              >
+                <KeyRound size={16} /> Change password
+              </button>
+              <button
                 onClick={handleSignOut}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg"
               >
@@ -141,6 +155,8 @@ export default function AdminLayout() {
           </aside>
         </div>
       )}
+
+      {showChangePw && <ChangePasswordModal onClose={() => setShowChangePw(false)} />}
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto pt-0 md:pt-0">
