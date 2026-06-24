@@ -55,7 +55,10 @@ export default function Login() {
     if (lastError) setError('Incorrect username or password. Try again.')
   }
 
-  const isKidMode = !username.includes('@') && username.length > 0 && username.length <= 4
+  // Super-admins who can also sign in with their initials — don't show the "youth" hints for them.
+  const STAFF_INITIALS = ['GG', 'MH']
+  const isStaffInitials = STAFF_INITIALS.includes(username.trim().toUpperCase())
+  const isKidMode = !username.includes('@') && username.length > 0 && username.length <= 4 && !isStaffInitials
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-slate-800 to-emerald-900 flex items-center justify-center px-4">
