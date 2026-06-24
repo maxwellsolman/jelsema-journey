@@ -1,18 +1,27 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabase'
 import { Eye, EyeOff } from 'lucide-react'
 
 // Kids log in with their initials — mapped to `<initials>@jelsema.app`.
-// Staff log in with their real email address (typed in full).
+// Staff log in with their real email address (typed in full) OR their initials
+// as a backup — initials resolve to their email via the staff_login_email lookup.
 function toKidEmail(initials) { return `${initials.trim().toLowerCase()}@jelsema.app` }
 
 // Returns the list of candidate emails to try in order.
-function resolveEmails(input) {
+async function resolveEmails(input) {
   const trimmed = input.trim()
-  // An '@' means a real email (staff) — use it as-is. Otherwise it's a kid's initials.
+  // An '@' means a real email (staff) — use it as-is.
   if (trimmed.includes('@')) return [trimmed.toLowerCase()]
-  return [toKidEmail(trimmed)]
+  // No '@' — could be staff initials (backup login) or a kid's initials.
+  const candidates = []
+  try {
+    const { data: staffEmail } = await supabase.rpc('staff_login_email', { p_login: trimmed })
+    if (staffEmail) candidates.push(staffEmail)
+  } catch { /* ignore — fall through to kid */ }
+  candidates.push(toKidEmail(trimmed))
+  return candidates
 }
 
 export default function Login() {
@@ -35,7 +44,7 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const candidates = resolveEmails(username)
+    const candidates = await resolveEmails(username)
     let lastError = null
     for (const email of candidates) {
       const { error } = await signIn(email, password)
