@@ -1,6 +1,6 @@
 // Deno Edge Function: manage-user
 // Handles privileged auth operations for super-admins:
-//   - create_admin   { initials, name, birthday, is_super_admin }
+//   - create_admin   { initials, name, password, birthday?, is_super_admin }
 //   - reset_password { user_id, new_password }
 //   - delete_admin   { admin_id }
 //   - update_email   { user_id, new_email }
@@ -22,12 +22,6 @@ const corsHeaders = {
 
 function staffEmail(initials: string) {
   return `${initials.trim().toLowerCase()}@jelsema.staff`
-}
-
-function birthdayToPassword(dateStr: string) {
-  // dateStr is YYYY-MM-DD
-  const [year, month, day] = dateStr.split('-')
-  return `${month}${day}${year}`
 }
 
 Deno.serve(async (req) => {
@@ -61,12 +55,14 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case 'create_admin': {
-        const { initials, name, birthday, is_super_admin } = body
-        if (!initials || !birthday || !name) {
-          return json({ error: 'initials, name, birthday required' }, 400)
+        const { initials, name, password, birthday, is_super_admin } = body
+        if (!initials || !password || !name) {
+          return json({ error: 'initials, name, password required' }, 400)
         }
-        const email    = staffEmail(initials)
-        const password = birthdayToPassword(birthday)
+        if (String(password).length < 6) {
+          return json({ error: 'password must be at least 6 characters' }, 400)
+        }
+        const email = staffEmail(initials)
 
         const { data: created, error: signUpErr } = await admin.auth.admin.createUser({
           email,
@@ -81,6 +77,7 @@ Deno.serve(async (req) => {
           name,
           initials: String(initials).toUpperCase(),
           is_super_admin: !!is_super_admin,
+          birthday: birthday || null,
         })
         if (insertErr) {
           // Roll back the auth user if the admins row failed

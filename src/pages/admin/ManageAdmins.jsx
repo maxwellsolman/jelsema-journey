@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { UserPlus, X, CheckCircle2, KeyRound, Shield, Lock } from 'lucide-react'
 import { format } from 'date-fns'
-import { createAdmin, resetPassword, deleteAdmin, birthdayToPassword } from '../../lib/manageUser'
+import { createAdmin, resetPassword, deleteAdmin } from '../../lib/manageUser'
 
 function Modal({ title, onClose, children }) {
   return (
@@ -41,6 +41,7 @@ export default function ManageAdmins() {
   // Add form
   const [name, setName]           = useState('')
   const [initials, setInitials]   = useState('')
+  const [password, setPassword]   = useState('')
   const [birthday, setBirthday]   = useState('')
   const [isSuper, setIsSuper]     = useState(false)
   const [saving, setSaving]       = useState(false)
@@ -70,14 +71,15 @@ export default function ManageAdmins() {
   }
 
   function resetAdd() {
-    setName(''); setInitials(''); setBirthday(''); setIsSuper(false); setError('')
+    setName(''); setInitials(''); setPassword(''); setBirthday(''); setIsSuper(false); setError('')
   }
 
   async function handleAdd() {
-    if (!name || !initials || !birthday) { setError('All fields are required.'); return }
+    if (!name || !initials || !password) { setError('Name, initials, and password are required.'); return }
+    if (password.length < 6) { setError('Password must be at least 6 characters.'); return }
     setSaving(true); setError('')
     try {
-      const res = await createAdmin({ name, initials, birthday, is_super_admin: isSuper })
+      const res = await createAdmin({ name, initials, password, birthday: birthday || null, is_super_admin: isSuper })
       setNewCreds({ initials: initials.toUpperCase(), password: res.password })
       setShowAdd(false)
       resetAdd()
@@ -176,7 +178,7 @@ export default function ManageAdmins() {
           <div className="text-sm text-slate-600">Share these with the staff member:</div>
           <div className="bg-white rounded-xl border border-emerald-200 p-3 space-y-1 font-mono text-sm">
             <div><span className="text-slate-500">Username:</span> <strong>{newCreds.initials}</strong></div>
-            <div><span className="text-slate-500">Password:</span> <strong>{newCreds.password}</strong> <span className="text-slate-400 font-sans">(their birthday)</span></div>
+            <div><span className="text-slate-500">Password:</span> <strong>{newCreds.password}</strong> <span className="text-slate-400 font-sans">(they can change it after signing in)</span></div>
           </div>
           <button onClick={() => setNewCreds(null)} className="text-xs text-slate-400 hover:underline">Dismiss</button>
         </div>
@@ -243,16 +245,17 @@ export default function ManageAdmins() {
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm uppercase font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-400" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Birthday * (password)</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Birthday (optional)</label>
                 <input type="date" value={birthday} onChange={e => setBirthday(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
               </div>
             </div>
-            {birthday && (
-              <div className="text-xs text-emerald-600 font-medium">
-                Default password will be <strong>{birthdayToPassword(birthday)}</strong>
-              </div>
-            )}
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">Password * (min 6 characters)</label>
+              <input type="text" value={password} onChange={e => setPassword(e.target.value)}
+                placeholder="Set their password"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+            </div>
             <label className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl border border-amber-100 bg-amber-50 cursor-pointer">
               <input type="checkbox" checked={isSuper} onChange={e => setIsSuper(e.target.checked)}
                 className="mt-0.5 w-4 h-4 accent-amber-500" />
@@ -262,10 +265,10 @@ export default function ManageAdmins() {
               </div>
             </label>
             <div className="bg-blue-50 border border-blue-100 rounded-xl px-3 py-2.5 text-xs text-blue-700">
-              <strong>Login info:</strong> Username = <strong>{initials || 'their initials'}</strong> · Password = birthday (e.g. 11181990)
+              <strong>Login info:</strong> Username = <strong>{initials || 'their initials'}</strong> · Password = whatever you set above
             </div>
             {error && <div className="bg-red-50 text-red-600 text-xs px-3 py-2 rounded-lg border border-red-100">{error}</div>}
-            <button onClick={handleAdd} disabled={saving || !name || !initials || !birthday}
+            <button onClick={handleAdd} disabled={saving || !name || !initials || !password}
               className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm disabled:opacity-50">
               {saving ? 'Creating account…' : 'Add Staff'}
             </button>

@@ -20,8 +20,8 @@ async function call(action, payload) {
   return body
 }
 
-export function createAdmin({ initials, name, birthday, is_super_admin }) {
-  return call('create_admin', { initials, name, birthday, is_super_admin })
+export function createAdmin({ initials, name, password, birthday, is_super_admin }) {
+  return call('create_admin', { initials, name, password, birthday, is_super_admin })
 }
 
 export function resetPassword({ user_id, new_password }) {
