@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { X, KeyRound, CheckCircle2, Mail } from 'lucide-react'
+import { X, KeyRound, CheckCircle2 } from 'lucide-react'
 
-// Lets a logged-in user change their own password (with current-password check),
-// or email themselves a reset link if they've forgotten it.
+// Lets a logged-in user change their own password (with current-password check).
+// If they've forgotten their current password, a super-admin resets it for them.
 export default function ChangePasswordModal({ onClose }) {
   const { user } = useAuth()
   const [current, setCurrent] = useState('')
@@ -13,9 +13,6 @@ export default function ChangePasswordModal({ onClose }) {
   const [err, setErr]         = useState('')
   const [saving, setSaving]   = useState(false)
   const [done, setDone]       = useState(false)
-
-  const [resetSending, setResetSending] = useState(false)
-  const [resetSent, setResetSent]       = useState(false)
 
   async function handleSave(e) {
     e.preventDefault()
@@ -33,16 +30,6 @@ export default function ChangePasswordModal({ onClose }) {
     setSaving(false)
     if (error) { setErr(error.message); return }
     setDone(true)
-  }
-
-  async function handleEmailReset() {
-    setResetSending(true); setErr('')
-    const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
-    setResetSending(false)
-    if (error) { setErr(error.message); return }
-    setResetSent(true)
   }
 
   return (
@@ -92,22 +79,9 @@ export default function ChangePasswordModal({ onClose }) {
 
             {/* Forgot current password */}
             <div className="mt-5 pt-4 border-t border-slate-100">
-              {resetSent ? (
-                <div className="text-xs text-emerald-600 flex items-center gap-1.5">
-                  <CheckCircle2 size={14} /> Reset link sent to {user.email}. Check your email.
-                </div>
-              ) : (
-                <>
-                  <div className="text-xs text-slate-500 mb-2">Forgot your current password?</div>
-                  <button onClick={handleEmailReset} disabled={resetSending}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-50">
-                    <Mail size={14} /> {resetSending ? 'Sending…' : `Email me a reset link (${user.email})`}
-                  </button>
-                  <div className="text-[11px] text-slate-400 mt-1.5">
-                    Or ask a super-admin to reset it for you.
-                  </div>
-                </>
-              )}
+              <div className="text-xs text-slate-500">
+                Forgot your current password? Ask a super-admin to reset it for you.
+              </div>
             </div>
           </>
         )}
